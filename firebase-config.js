@@ -1,26 +1,18 @@
 /**
  * CONFIGURACIÓN DE FIREBASE REALTIME DATABASE
- * 
- * Instrucciones rápidas:
- * 1. Creá un proyecto en https://console.firebase.google.com/
- * 2. Activá "Realtime Database" (en modo de prueba o con las reglas del README.md)
- * 3. En Configuración del proyecto -> Tus apps -> Web, copiá tu objeto `firebaseConfig`
- * 4. Reemplazá los valores de abajo con los de tu proyecto.
- * 
- * NOTA: Si todavía no pegaste tus credenciales reales, la aplicación funcionará
- * automáticamente en "MODO DEMO LOCAL" sincronizando entre pestañas del mismo
- * navegador (ideal para probar las 3 pantallas y el simulador de votos al instante).
+ * Conectado en tiempo real para sincronizar admin.html, resultados.html e index.html
+ * entre distintos dispositivos y celulares.
  */
 
 window.FIREBASE_CONFIG = {
-  apiKey: "PEGAR_AQUI_TU_API_KEY",
-  authDomain: "tu-proyecto.firebaseapp.com",
-  databaseURL: "https://tu-proyecto-default-rtdb.firebaseio.com",
-  projectId: "tu-proyecto",
-  storageBucket: "tu-proyecto.appspot.com",
-  messagingSenderId: "000000000000",
-  appId: "1:000000000000:web:0000000000000000"
+  apiKey: "AIzaSyDTLy_70DpMGXWl0O_oG1SNHauJPtY4VPI",
+  authDomain: "ficcionario-eff04.firebaseapp.com",
+  databaseURL: "https://ficcionario-eff04-default-rtdb.firebaseio.com",
+  projectId: "ficcionario-eff04",
+  storageBucket: "ficcionario-eff04.firebasestorage.app",
+  messagingSenderId: "657632350416",
+  appId: "1:657632350416:web:de9857445e1b76c00e8ed5"
 };
 
-// Ruta raíz dentro de la base de datos de Firebase
-window.FIREBASE_DB_PATH = "autor_ia_trucha_session";
+// Ruta aislada dentro de la base de datos de Firebase con permisos de lectura/escritura activos
+window.FIREBASE_DB_PATH = "ficcionario/autor_ia_trucha_session";
