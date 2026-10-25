@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>¿Autor, IA o cita trucha? — Pantalla Proyectada</title>
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <!-- Generador QR instantáneo en cliente -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body class="projector-body">
+
+  <!-- Indicador de estado de red discreto -->
+  <div id="connBanner" class="connection-banner hidden">
+    <span class="connection-dot"></span>
+    <span id="connText">Conectado</span>
+  </div>
+
+  <!-- Barra superior minimalista -->
+  <header class="projector-topbar">
+    <div id="topBrand" class="projector-brand">
+      ¿Autor, IA o cita trucha?
+    </div>
+    <div class="projector-meta-right">
+      <div id="projectorRoundBadge" class="projector-round-indicator hidden">
+        RONDA 1 / 9
+      </div>
+    </div>
+  </header>
+
+  <!-- ESCENARIO PRINCIPAL PROYECTADO -->
+  <main class="projector-stage">
+
+    <!-- ==================================================================
+         ESTADO 1: INGRESO
+         ================================================================== -->
+    <section id="stageIntro" class="stage-intro">
+      <div>
+        <h1 class="intro-title">¿Autor, IA o cita trucha?</h1>
+        <p class="intro-cta">Escaneá el QR y preparate para desconfiar de todo.</p>
+        <p class="intro-subtitle">
+          Nueve frases. Tres posibilidades. Una confianza injustificadamente alta en nuestro propio criterio.
+        </p>
+      </div>
+
+      <div class="qr-card-large">
+        <div id="introQrContainer" class="qr-box"></div>
+        <div id="introQrUrl" class="qr-url-caption"></div>
+      </div>
+    </section>
+
+    <!-- ==================================================================
+         ESTADOS 2, 3, 4 y 5: VOTACIÓN, SUSPENSO, RESULTADOS Y REVELACIÓN
+         ================================================================== -->
+    <section id="stageQuestion" class="stage-quote-wrap hidden">
+      <blockquote id="projectedQuote" class="projector-quote">
+        “…”
+      </blockquote>
+
+      <!-- Estado 2 (Votación abierta) y Estado 3 (Votación cerrada) -->
+      <div id="statusRow" class="projector-status-row">
+        <div id="badgeOpen" class="status-badge-live">
+          <span class="live-dot"></span>
+          <span>Votación abierta</span>
+        </div>
+
+        <div id="badgeClosed" class="status-badge-closed hidden">
+          <span>Votación cerrada</span>
+        </div>
+
+        <div class="live-vote-counter">
+          Votos recibidos: <strong id="liveVotesCount">0</strong>
+        </div>
+      </div>
+
+      <!-- Estado 4 (Resultados neutros) y Estado 5 (Revelación destacada) -->
+      <div id="barsSection" class="bars-container hidden">
+        <div id="barRowAutor" class="result-bar-row">
+          <div class="result-bar-label">
+            <span>AUTOR</span>
+          </div>
+          <div class="result-bar-track">
+            <div id="barFillAutor" class="result-bar-fill"></div>
+          </div>
+          <div id="barPctAutor" class="result-bar-pct">0 %</div>
+        </div>
+
+        <div id="barRowIa" class="result-bar-row">
+          <div class="result-bar-label">
+            <span>IA</span>
+          </div>
+          <div class="result-bar-track">
+            <div id="barFillIa" class="result-bar-fill"></div>
+          </div>
+          <div id="barPctIa" class="result-bar-pct">0 %</div>
+        </div>
+
+        <div id="barRowTrucha" class="result-bar-row">
+          <div class="result-bar-label">
+            <span>CITA TRUCHA</span>
+          </div>
+          <div class="result-bar-track">
+            <div id="barFillTrucha" class="result-bar-fill"></div>
+          </div>
+          <div id="barPctTrucha" class="result-bar-pct">0 %</div>
+        </div>
+      </div>
+
+      <!-- Estado 5: Veredicto, Autor/Atribución y Explicación -->
+      <div id="revealCallout" class="reveal-callout hidden">
+        <div class="reveal-headline">
+          <span id="revealVerdictBadge" class="reveal-verdict-pill">📚 ERA AUTOR</span>
+          <span id="revealAuthorText" class="reveal-author-name"></span>
+        </div>
+        <p id="revealExplanationText" class="reveal-explanation"></p>
+      </div>
+    </section>
+
+    <!-- ==================================================================
+         ESTADO FINAL: RESUMEN GENERAL DE LAS 9 FRASES
+         ================================================================== -->
+    <section id="stageFinal" class="final-summary-layout hidden">
+      <div class="final-left-panel">
+        <div>
+          <h1 class="final-main-title">¿Qué tan buenos somos detectando?</h1>
+          <div id="finalGlobalPct" class="final-score-big">0 %</div>
+          <p class="final-score-caption">
+            de aciertos globales (<strong id="finalTotalVotes">0</strong> votos totales emitidos)
+          </p>
+        </div>
+
+        <div class="final-rank-box">
+          <div id="finalRankRange" class="final-rank-label">Diagnóstico colectivo</div>
+          <div id="finalRankTitle" class="final-rank-title">—</div>
+          <p id="finalRankSubtitle" class="final-rank-sub"></p>
+        </div>
+      </div>
+
+      <div class="final-right-panel">
+        <div class="final-list-header">
+          <span class="final-list-title">De la más fácil a la más engañosa (% de aciertos)</span>
+        </div>
+        <div id="finalQuestionsList" class="final-questions-list"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Pie discreto -->
+  <footer class="projector-topbar" style="opacity: 0.55; font-size: 0.85rem;">
+    <span id="footerHint">Nueve frases. Tres posibilidades.</span>
+    <span id="footerRightUrl" style="font-family: var(--font-mono);"></span>
+  </footer>
+
+  <!-- Modal QR superpuesto cuando la presentadora activa "Mostrar QR" en medio de una ronda -->
+  <div id="qrOverlayModal" class="qr-overlay-modal hidden">
+    <div class="qr-overlay-content">
+      <div class="qr-card-large" style="padding: 22px;">
+        <div id="modalQrContainer" class="qr-box"></div>
+      </div>
+      <div>
+        <h2 style="font-size: 2.6rem; font-weight: 800; margin-bottom: 14px;">
+          Sumate a la votación
+        </h2>
+        <p style="font-size: 1.45rem; color: var(--accent-primary); font-weight: 600; margin-bottom: 16px;">
+          Escaneá el código QR con la cámara de tu celular.
+        </p>
+        <p id="modalQrUrlText" style="font-family: var(--font-mono); font-size: 1.15rem; color: var(--text-secondary); word-break: break-all;"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="firebase-config.js"></script>
+  <script src="questions.js"></script>
+  <script src="app.js"></script>
+  <script>
+    (function () {
+      const { STATES, CATEGORY_META, engine, renderQRCode } = window.AIT;
+
+      const connBanner = document.getElementById("connBanner");
+      const connText = document.getElementById("connText");
+      const projectorRoundBadge = document.getElementById("projectorRoundBadge");
+      const footerRightUrl = document.getElementById("footerRightUrl");
+
+      const stageIntro = document.getElementById("stageIntro");
+      const introQrContainer = document.getElementById("introQrContainer");
+      const introQrUrl = document.getElementById("introQrUrl");
+
+      const stageQuestion = document.getElementById("stageQuestion");
+      const projectedQuote = document.getElementById("projectedQuote");
+      const statusRow = document.getElementById("statusRow");
+      const badgeOpen = document.getElementById("badgeOpen");
+      const badgeClosed = document.getElementById("badgeClosed");
+      const liveVotesCount = document.getElementById("liveVotesCount");
+
+      const barsSection = document.getElementById("barsSection");
+      const barRows = {
+        autor: document.getElementById("barRowAutor"),
+        ia: document.getElementById("barRowIa"),
+        trucha: document.getElementById("barRowTrucha")
+      };
+      const barFills = {
+        autor: document.getElementById("barFillAutor"),
+        ia: document.getElementById("barFillIa"),
+        trucha: document.getElementById("barFillTrucha")
+      };
+      const barPcts = {
+        autor: document.getElementById("barPctAutor"),
+        ia: document.getElementById("barPctIa"),
+        trucha: document.getElementById("barPctTrucha")
+      };
+
+      const revealCallout = document.getElementById("revealCallout");
+      const revealVerdictBadge = document.getElementById("revealVerdictBadge");
+      const revealAuthorText = document.getElementById("revealAuthorText");
+      const revealExplanationText = document.getElementById("revealExplanationText");
+
+      const stageFinal = document.getElementById("stageFinal");
+      const finalGlobalPct = document.getElementById("finalGlobalPct");
+      const finalTotalVotes = document.getElementById("finalTotalVotes");
+      const finalRankRange = document.getElementById("finalRankRange");
+      const finalRankTitle = document.getElementById("finalRankTitle");
+      const finalRankSubtitle = document.getElementById("finalRankSubtitle");
+      const finalQuestionsList = document.getElementById("finalQuestionsList");
+
+      const qrOverlayModal = document.getElementById("qrOverlayModal");
+      const modalQrContainer = document.getElementById("modalQrContainer");
+      const modalQrUrlText = document.getElementById("modalQrUrlText");
+
+      let lastRenderedUrl = "";
+      let lastStatus = null;
+
+      engine.init();
+
+      engine.onConnectionChange(({ isConnected, mode }) => {
+        if (!isConnected) {
+          connBanner.classList.remove("hidden", "demo-mode");
+          connBanner.classList.add("offline");
+          connText.textContent = "Sin conexión";
+        } else if (mode === "local") {
+          connBanner.classList.remove("hidden", "offline");
+          connBanner.classList.add("demo-mode");
+          connText.textContent = "Sincronización Local (Demo)";
+        } else {
+          connBanner.classList.add("hidden");
+        }
+      });
+
+      function updateQRCodes() {
+        const url = engine.getParticipantUrl();
+        if (url === lastRenderedUrl) return;
+        lastRenderedUrl = url;
+
+        renderQRCode(introQrContainer, url, 290);
+        renderQRCode(modalQrContainer, url, 270);
+        introQrUrl.textContent = url;
+        modalQrUrlText.textContent = url;
+        footerRightUrl.textContent = url;
+      }
+
+      engine.subscribe((snap) => {
+        updateQRCodes();
+
+        const { state, questions, currentQuestion, currentQuestionStats, globalSummary } = snap;
+        const status = state.status;
+        const roundNumber = state.currentIndex + 1;
+        const totalQuestions = questions.length;
+
+        // Mostrar u ocultar modal de QR superpuesto si la presentadora lo activó
+        if (state.showQRModal && status !== STATES.WAITING) {
+          qrOverlayModal.classList.remove("hidden");
+        } else {
+          qrOverlayModal.classList.add("hidden");
+        }
+
+        // ESTADO 1: INGRESO
+        if (status === STATES.WAITING) {
+          projectorRoundBadge.classList.add("hidden");
+          stageIntro.classList.remove("hidden");
+          stageQuestion.classList.add("hidden");
+          stageFinal.classList.add("hidden");
+          lastStatus = status;
+          return;
+        }
+
+        // ESTADO FINAL: RESUMEN DE TODAS LAS FRASES
+        if (status === STATES.FINAL) {
+          projectorRoundBadge.textContent = "RESUMEN FINAL";
+          projectorRoundBadge.classList.remove("hidden");
+
+          stageIntro.classList.add("hidden");
+          stageQuestion.classList.add("hidden");
+          stageFinal.classList.remove("hidden");
+
+          finalGlobalPct.textContent = `${globalSummary.globalAccuracyPct} %`;
+          finalTotalVotes.textContent = globalSummary.totalVotesAll;
+          finalRankRange.textContent = `Rango ${globalSummary.rank.range} de aciertos`;
+          finalRankTitle.textContent = globalSummary.rank.title;
+          finalRankSubtitle.textContent = globalSummary.rank.subtitle;
+
+          finalQuestionsList.innerHTML = "";
+          globalSummary.sortedByDifficulty.forEach((item) => {
+            const row = document.createElement("div");
+            row.className = "final-q-item";
+
+            const meta = CATEGORY_META[item.question.correct] || CATEGORY_META.autor;
+
+            row.innerHTML = `
+              <div class="final-q-quote" title="${item.question.quote.replace(/"/g, '&quot;')}">
+                <strong>#${item.index}</strong> “${item.question.quote}”
+              </div>
+              <span class="final-q-tag">${meta.emoji} ${meta.label}</span>
+              <span class="final-q-pct">${item.stats.accuracyPct} %</span>
+            `;
+            finalQuestionsList.appendChild(row);
+          });
+
+          lastStatus = status;
+          return;
+        }
+
+        // ESTADOS 2, 3, 4 y 5 (Ronda activa)
+        if (!currentQuestion || !currentQuestionStats) return;
+
+        stageIntro.classList.add("hidden");
+        stageFinal.classList.add("hidden");
+        stageQuestion.classList.remove("hidden");
+
+        projectorRoundBadge.textContent = `RONDA ${roundNumber} / ${totalQuestions}`;
+        projectorRoundBadge.classList.remove("hidden");
+
+        projectedQuote.textContent = `“${currentQuestion.quote}”`;
+        liveVotesCount.textContent = currentQuestionStats.total;
+
+        // Estado 2: Votación abierta
+        if (status === STATES.OPEN) {
+          projectedQuote.classList.remove("compact");
+          statusRow.classList.remove("hidden");
+          badgeOpen.classList.remove("hidden");
+          badgeClosed.classList.add("hidden");
+          barsSection.classList.add("hidden");
+          revealCallout.classList.add("hidden");
+          resetBarStyles();
+        }
+
+        // Estado 3: Votación cerrada (suspenso)
+        else if (status === STATES.CLOSED) {
+          projectedQuote.classList.remove("compact");
+          statusRow.classList.remove("hidden");
+          badgeOpen.classList.add("hidden");
+          badgeClosed.classList.remove("hidden");
+          barsSection.classList.add("hidden");
+          revealCallout.classList.add("hidden");
+          resetBarStyles();
+        }
+
+        // Estado 4: Resultados (barras horizontales grandes animadas, sin revelar cuál es correcta)
+        else if (status === STATES.RESULTS) {
+          projectedQuote.classList.add("compact");
+          statusRow.classList.add("hidden");
+          barsSection.classList.remove("hidden");
+          revealCallout.classList.add("hidden");
+
+          ["autor", "ia", "trucha"].forEach((key) => {
+            barRows[key].classList.remove("is-correct-choice", "is-dimmed");
+          });
+
+          animateBarsTo(currentQuestionStats.pct, lastStatus !== STATES.RESULTS);
+        }
+
+        // Estado 5: Revelación (destaca opción correcta + autor/atribución + explicación)
+        else if (status === STATES.REVEALED) {
+          projectedQuote.classList.add("compact");
+          statusRow.classList.add("hidden");
+          barsSection.classList.remove("hidden");
+          revealCallout.classList.remove("hidden");
+
+          animateBarsTo(currentQuestionStats.pct, false);
+
+          const correctKey = currentQuestion.correct;
+          ["autor", "ia", "trucha"].forEach((key) => {
+            if (key === correctKey) {
+              barRows[key].classList.add("is-correct-choice");
+              barRows[key].classList.remove("is-dimmed");
+            } else {
+              barRows[key].classList.remove("is-correct-choice");
+              barRows[key].classList.add("is-dimmed");
+            }
+          });
+
+          const meta = CATEGORY_META[correctKey] || CATEGORY_META.autor;
+          revealVerdictBadge.textContent = meta.revealBadge;
+
+          if (correctKey === "autor") {
+            revealAuthorText.textContent = currentQuestion.author || "";
+          } else if (correctKey === "trucha") {
+            const attr = currentQuestion.author || "";
+            revealAuthorText.textContent = attr.toLowerCase().includes("atribu")
+              ? attr
+              : `Atribuida habitualmente a ${attr}`;
+          } else {
+            revealAuthorText.textContent = "Generada por Inteligencia Artificial";
+          }
+
+          revealExplanationText.textContent = currentQuestion.explanation || "";
+        }
+
+        lastStatus = status;
+      });
+
+      function resetBarStyles() {
+        ["autor", "ia", "trucha"].forEach((key) => {
+          barFills[key].style.width = "0%";
+          barPcts[key].textContent = "0 %";
+          barRows[key].classList.remove("is-correct-choice", "is-dimmed");
+        });
+      }
+
+      function animateBarsTo(pctObj, fromZero) {
+        if (fromZero) {
+          ["autor", "ia", "trucha"].forEach((key) => {
+            barFills[key].style.width = "0%";
+          });
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              ["autor", "ia", "trucha"].forEach((key) => {
+                barFills[key].style.width = `${pctObj[key]}%`;
+                barPcts[key].textContent = `${pctObj[key]} %`;
+              });
+            });
+          });
+        } else {
+          ["autor", "ia", "trucha"].forEach((key) => {
+            barFills[key].style.width = `${pctObj[key]}%`;
+            barPcts[key].textContent = `${pctObj[key]} %`;
+          });
+        }
+      }
+    })();
+  </script>
+</body>
+</html>

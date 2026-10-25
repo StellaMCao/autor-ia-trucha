@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Panel de Administración — ¿Autor, IA o cita trucha?</title>
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <!-- Generador QR -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body class="admin-body">
+
+  <!-- Indicador de conexión -->
+  <div id="connBanner" class="connection-banner hidden">
+    <span class="connection-dot"></span>
+    <span id="connText">Conectado</span>
+  </div>
+
+  <header class="admin-header">
+    <div class="admin-title-group">
+      <h1>Panel de Control · ¿Autor, IA o cita trucha?</h1>
+      <p>Control en vivo para la presentadora · Sincronizado en tiempo real</p>
+    </div>
+
+    <div class="admin-quick-links">
+      <button type="button" id="btnToggleQR" class="btn">
+        📱 Mostrar QR en proyector
+      </button>
+      <a href="resultados.html" target="_blank" class="btn btn-indigo">
+        🖥️ Abrir Pantalla Proyectada ↗
+      </a>
+      <a href="index.html" target="_blank" class="btn">
+        📲 Abrir Vista Participante ↗
+      </a>
+    </div>
+  </header>
+
+  <!-- Telemetría compacta requerida -->
+  <section class="admin-telemetry-bar">
+    <div class="telemetry-card">
+      <div class="telemetry-label">Estado actual</div>
+      <div id="telStatus" class="telemetry-value">Esperando</div>
+    </div>
+    <div class="telemetry-card">
+      <div class="telemetry-label">Pregunta actual</div>
+      <div id="telQuestion" class="telemetry-value">1 / 9</div>
+    </div>
+    <div class="telemetry-card">
+      <div class="telemetry-label">Votos en esta frase</div>
+      <div id="telCurrentVotes" class="telemetry-value">0</div>
+    </div>
+    <div class="telemetry-card">
+      <div class="telemetry-label">Total de votos sesión</div>
+      <div id="telTotalVotes" class="telemetry-value">0</div>
+    </div>
+  </section>
+
+  <div class="admin-grid">
+    <!-- COLUMNA IZQUIERDA: Controles de flujo y vista de la pregunta activa -->
+    <div>
+      <!-- Panel 1: Secuencia de estados de la ronda -->
+      <section class="admin-panel">
+        <div class="admin-panel-title">
+          <span>1. Control de estados de la pantalla proyectada</span>
+          <span id="syncModeTag" style="font-family: var(--font-mono); font-size: 0.75rem;"></span>
+        </div>
+
+        <div class="stage-controls-grid">
+          <button type="button" class="stage-step-btn" data-set-status="waiting">
+            <span class="stage-step-num">ESTADO 1</span>
+            <span class="stage-step-name">Pantalla de Ingreso</span>
+            <span class="stage-step-desc">Muestra título y QR grande</span>
+          </button>
+
+          <button type="button" class="stage-step-btn" data-set-status="open">
+            <span class="stage-step-num">ESTADO 2</span>
+            <span class="stage-step-name">Abrir votación</span>
+            <span class="stage-step-desc">Habilita botones en celulares</span>
+          </button>
+
+          <button type="button" class="stage-step-btn" data-set-status="closed">
+            <span class="stage-step-num">ESTADO 3</span>
+            <span class="stage-step-name">Cerrar votación</span>
+            <span class="stage-step-desc">Momento de suspenso</span>
+          </button>
+
+          <button type="button" class="stage-step-btn" data-set-status="results">
+            <span class="stage-step-num">ESTADO 4</span>
+            <span class="stage-step-name">Revelar resultados</span>
+            <span class="stage-step-desc">Barras de % sin solución</span>
+          </button>
+
+          <button type="button" class="stage-step-btn" data-set-status="revealed">
+            <span class="stage-step-num">ESTADO 5</span>
+            <span class="stage-step-name">Revelar respuesta</span>
+            <span class="stage-step-desc">Destaca opción + explicación</span>
+          </button>
+
+          <button type="button" class="stage-step-btn" data-set-status="final">
+            <span class="stage-step-num">FINAL</span>
+            <span class="stage-step-name">Finalizar el juego</span>
+            <span class="stage-step-desc">Resumen y ranking general</span>
+          </button>
+        </div>
+
+        <!-- Navegación rápida entre frases -->
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; padding-top: 12px; border-top: 1px solid var(--border-subtle);">
+          <div style="display: flex; gap: 10px;">
+            <button type="button" id="btnPrevQ" class="btn">
+              ← Frase anterior
+            </button>
+            <button type="button" id="btnNextQ" class="btn btn-primary">
+              Siguiente frase y abrir votación →
+            </button>
+          </div>
+
+          <div style="display: flex; gap: 10px;">
+            <button type="button" id="btnResetQuestion" class="btn btn-danger">
+              Reiniciar esta pregunta
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel 2: Detalle de la frase activa y machete para la presentadora -->
+      <section class="admin-panel">
+        <div class="admin-panel-title">
+          <span>2. Frase seleccionada (vista y notas para la presentadora)</span>
+          <span id="adminRoundPill" style="color: var(--accent-primary);">Frase #1</span>
+        </div>
+
+        <div class="admin-current-quote-card">
+          <div id="adminQuoteText" class="admin-quote-text">“…”</div>
+          <div class="admin-secret-meta">
+            <div>Respuesta correcta: <span id="adminSecretCorrect" class="admin-secret-badge">—</span></div>
+            <div>Autor / Atribución: <strong id="adminSecretAuthor" style="color: var(--text-primary);">—</strong></div>
+          </div>
+          <div id="adminSecretExplanation" style="margin-top: 8px; font-size: 0.88rem; color: var(--text-secondary);"></div>
+        </div>
+
+        <!-- Monitoreo en vivo de votos de esta pregunta (visible para la presentadora) -->
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+          <div class="telemetry-card">
+            <div class="telemetry-label">📚 Votos AUTOR</div>
+            <div id="adminStatAutor" class="telemetry-value">0 (0 %)</div>
+          </div>
+          <div class="telemetry-card">
+            <div class="telemetry-label">🤖 Votos IA</div>
+            <div id="adminStatIa" class="telemetry-value">0 (0 %)</div>
+          </div>
+          <div class="telemetry-card">
+            <div class="telemetry-label">🎭 Votos CITA TRUCHA</div>
+            <div id="adminStatTrucha" class="telemetry-value">0 (0 %)</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel 3: Modo de Prueba / Simulador de Votos -->
+      <section class="admin-panel">
+        <div class="admin-panel-title">
+          <span>3. Modo de prueba (Simulador de público sin usar varios celulares)</span>
+        </div>
+        <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 14px;">
+          Generá votos simulados instantáneos para probar las animaciones de barras, los porcentajes y el ranking final antes de la presentación.
+        </p>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+          <button type="button" id="btnSim10" class="btn">
+            🧪 Simular +15 votos en esta frase
+          </button>
+          <button type="button" id="btnSim40" class="btn">
+            🧪 Simular +40 votos en esta frase
+          </button>
+          <button type="button" id="btnSimAll" class="btn btn-indigo">
+            ⚡ Simular auditorio completo (las 9 frases)
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <!-- COLUMNA DERECHA: Lista de las 9 preguntas, QR y Reinicio Total -->
+    <div>
+      <!-- Selector directo de pregunta -->
+      <section class="admin-panel">
+        <div class="admin-panel-title">
+          <span>Banco de frases (clic para saltar)</span>
+          <button type="button" id="btnToggleEditor" class="btn" style="padding: 4px 10px; font-size: 0.78rem;">
+            ✏️ Editar frases
+          </button>
+        </div>
+
+        <div id="questionSelectorList" class="question-selector-list"></div>
+      </section>
+
+      <!-- Configuración de QR y URL del público -->
+      <section class="admin-panel">
+        <div class="admin-panel-title">
+          <span>Código QR de acceso</span>
+        </div>
+        <div style="display: flex; gap: 16px; align-items: center; margin-bottom: 12px;">
+          <div style="background: #fff; padding: 10px; border-radius: 10px;">
+            <div id="adminQrPreview"></div>
+          </div>
+          <div style="flex: 1;">
+            <label for="inputParticipantUrl" style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 6px;">
+              URL pública a la que apunta el QR (se detecta sola en GitHub Pages):
+            </label>
+            <input type="url" id="inputParticipantUrl" class="input-field" placeholder="https://tu-usuario.github.io/autor-ia-trucha/" />
+            <div style="display: flex; gap: 8px; margin-top: 8px;">
+              <button type="button" id="btnSaveUrl" class="btn" style="padding: 6px 12px; font-size: 0.8rem;">
+                Actualizar QR
+              </button>
+              <button type="button" id="btnResetUrl" class="btn" style="padding: 6px 12px; font-size: 0.8rem;">
+                Auto-detectar
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Zona de peligro / Reiniciar toda la sesión -->
+      <section class="admin-panel" style="border-color: rgba(239, 68, 68, 0.3);">
+        <div class="admin-panel-title" style="color: #fca5a5;">
+          <span>Reinicio general de sesión</span>
+        </div>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px;">
+          Borra todos los votos de todas las preguntas, vuelve a la Frase #1 en estado de ingreso y permite que los mismos dispositivos vuelvan a votar desde cero.
+        </p>
+        <button type="button" id="btnResetSession" class="btn btn-danger" style="width: 100%;">
+          🗑️ Reiniciar toda la sesión (borrar todos los votos)
+        </button>
+      </section>
+    </div>
+  </div>
+
+  <!-- Modal opcional para editar/reordenar frases desde la interfaz si la presentadora quiere cambiar algo al vuelo -->
+  <div id="editorModal" class="qr-overlay-modal hidden">
+    <div class="admin-panel" style="width: 100%; max-width: 860px; max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="admin-panel-title">
+        <span>Editor rápido del banco de frases (JSON)</span>
+        <button type="button" id="btnCloseEditor" class="btn">Cerrar ✕</button>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 10px;">
+        Podés editar permanentemente el archivo <code>questions.js</code> en tu repositorio, o modificar/reordenar las frases acá mismo para esta sesión:
+      </p>
+      <textarea id="textareaQuestionsJson" class="input-field" style="flex: 1; min-height: 360px; font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.4;"></textarea>
+      <div style="display: flex; justify-content: space-between; margin-top: 14px;">
+        <button type="button" id="btnRestoreDefaultQuestions" class="btn btn-danger">
+          Restaurar las 9 frases originales de questions.js
+        </button>
+        <button type="button" id="btnSaveCustomQuestions" class="btn btn-primary">
+          Guardar cambios en banco de frases
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="firebase-config.js"></script>
+  <script src="questions.js"></script>
+  <script src="app.js"></script>
+  <script>
+    (function () {
+      const { STATES, CATEGORY_META, engine, renderQRCode } = window.AIT;
+
+      const STATUS_LABELS = {
+        [STATES.WAITING]: "Esperando (Ingreso)",
+        [STATES.OPEN]: "Votación abierta",
+        [STATES.CLOSED]: "Votación cerrada",
+        [STATES.RESULTS]: "Resultados (%)",
+        [STATES.REVEALED]: "Respuesta revelada",
+        [STATES.FINAL]: "Resumen final"
+      };
+
+      const connBanner = document.getElementById("connBanner");
+      const connText = document.getElementById("connText");
+      const syncModeTag = document.getElementById("syncModeTag");
+
+      const telStatus = document.getElementById("telStatus");
+      const telQuestion = document.getElementById("telQuestion");
+      const telCurrentVotes = document.getElementById("telCurrentVotes");
+      const telTotalVotes = document.getElementById("telTotalVotes");
+
+      const stageButtons = document.querySelectorAll("[data-set-status]");
+      const btnPrevQ = document.getElementById("btnPrevQ");
+      const btnNextQ = document.getElementById("btnNextQ");
+      const btnResetQuestion = document.getElementById("btnResetQuestion");
+      const btnResetSession = document.getElementById("btnResetSession");
+      const btnToggleQR = document.getElementById("btnToggleQR");
+
+      const adminRoundPill = document.getElementById("adminRoundPill");
+      const adminQuoteText = document.getElementById("adminQuoteText");
+      const adminSecretCorrect = document.getElementById("adminSecretCorrect");
+      const adminSecretAuthor = document.getElementById("adminSecretAuthor");
+      const adminSecretExplanation = document.getElementById("adminSecretExplanation");
+
+      const adminStatAutor = document.getElementById("adminStatAutor");
+      const adminStatIa = document.getElementById("adminStatIa");
+      const adminStatTrucha = document.getElementById("adminStatTrucha");
+
+      const questionSelectorList = document.getElementById("questionSelectorList");
+
+      const btnSim10 = document.getElementById("btnSim10");
+      const btnSim40 = document.getElementById("btnSim40");
+      const btnSimAll = document.getElementById("btnSimAll");
+
+      const adminQrPreview = document.getElementById("adminQrPreview");
+      const inputParticipantUrl = document.getElementById("inputParticipantUrl");
+      const btnSaveUrl = document.getElementById("btnSaveUrl");
+      const btnResetUrl = document.getElementById("btnResetUrl");
+
+      const btnToggleEditor = document.getElementById("btnToggleEditor");
+      const editorModal = document.getElementById("editorModal");
+      const btnCloseEditor = document.getElementById("btnCloseEditor");
+      const textareaQuestionsJson = document.getElementById("textareaQuestionsJson");
+      const btnSaveCustomQuestions = document.getElementById("btnSaveCustomQuestions");
+      const btnRestoreDefaultQuestions = document.getElementById("btnRestoreDefaultQuestions");
+
+      let currentSnap = null;
+      let lastQrUrl = "";
+
+      engine.init();
+
+      engine.onConnectionChange(({ isConnected, mode }) => {
+        syncModeTag.textContent =
+          mode === "firebase" ? "🔥 Firebase Realtime DB" : "⚡ Modo Local Multi-pestaña";
+
+        if (!isConnected) {
+          connBanner.classList.remove("hidden", "demo-mode");
+          connBanner.classList.add("offline");
+          connText.textContent = "Sin conexión";
+        } else if (mode === "local") {
+          connBanner.classList.remove("hidden", "offline");
+          connBanner.classList.add("demo-mode");
+          connText.textContent = "Modo Demo Local (Sin configurar Firebase)";
+        } else {
+          connBanner.classList.add("hidden");
+        }
+      });
+
+      function refreshAdminQR() {
+        const url = engine.getParticipantUrl();
+        if (url === lastQrUrl) return;
+        lastQrUrl = url;
+        inputParticipantUrl.value = url;
+        renderQRCode(adminQrPreview, url, 115);
+      }
+
+      engine.subscribe((snap) => {
+        currentSnap = snap;
+        refreshAdminQR();
+
+        const { state, questions, currentQuestion, currentQuestionStats, globalSummary } = snap;
+        const idx = state.currentIndex;
+        const totalQ = questions.length;
+
+        // Telemetría superior
+        telStatus.textContent = STATUS_LABELS[state.status] || state.status;
+        telQuestion.textContent = `${idx + 1} / ${totalQ}`;
+        telCurrentVotes.textContent = currentQuestionStats ? currentQuestionStats.total : 0;
+        telTotalVotes.textContent = globalSummary.totalVotesAll;
+
+        // Estado del botón Mostrar QR
+        if (state.showQRModal) {
+          btnToggleQR.classList.add("btn-active-toggle");
+          btnToggleQR.textContent = "📱 Ocultar QR superpuesto";
+        } else {
+          btnToggleQR.classList.remove("btn-active-toggle");
+          btnToggleQR.textContent = "📱 Mostrar QR en proyector";
+        }
+
+        // Botones de estado
+        stageButtons.forEach((btn) => {
+          const st = btn.getAttribute("data-set-status");
+          if (st === state.status) {
+            btn.classList.add("active-state");
+          } else {
+            btn.classList.remove("active-state");
+          }
+        });
+
+        btnPrevQ.disabled = idx <= 0;
+        btnNextQ.textContent =
+          idx < totalQ - 1
+            ? `Siguiente frase (#${idx + 2}) y abrir votación →`
+            : `Ir al Resumen Final →`;
+
+        // Datos de la pregunta actual
+        if (currentQuestion && currentQuestionStats) {
+          adminRoundPill.textContent = `Frase #${idx + 1} (ID ${currentQuestion.id})`;
+          adminQuoteText.textContent = `“${currentQuestion.quote}”`;
+
+          const meta = CATEGORY_META[currentQuestion.correct] || CATEGORY_META.autor;
+          adminSecretCorrect.textContent = `${meta.emoji} ${meta.label}`;
+          adminSecretAuthor.textContent = currentQuestion.author || "Ninguno";
+          adminSecretExplanation.textContent = currentQuestion.explanation || "";
+
+          adminStatAutor.textContent = `${currentQuestionStats.counts.autor} (${currentQuestionStats.pct.autor} %)`;
+          adminStatIa.textContent = `${currentQuestionStats.counts.ia} (${currentQuestionStats.pct.ia} %)`;
+          adminStatTrucha.textContent = `${currentQuestionStats.counts.trucha} (${currentQuestionStats.pct.trucha} %)`;
+        }
+
+        // Lista de selección de preguntas
+        questionSelectorList.innerHTML = "";
+        questions.forEach((q, qIndex) => {
+          const qVotesObj = (snap.votesByQuestion && snap.votesByQuestion[q.id]) || {};
+          const qStats = engine.computeQuestionStats(q, qVotesObj);
+          const item = document.createElement("button");
+          item.type = "button";
+          item.className = "q-select-item" + (qIndex === idx ? " current" : "");
+          item.innerHTML = `
+            <span class="q-select-num">#${qIndex + 1}</span>
+            <span class="q-select-text">“${q.quote}”</span>
+            <span class="q-select-votes">${qStats.total} v.</span>
+          `;
+          item.addEventListener("click", () => {
+            // Al seleccionar una pregunta desde la lista, si estaba en waiting o final pasamos a open, o mantenemos open
+            const nextStatus =
+              state.status === STATES.WAITING || state.status === STATES.FINAL
+                ? STATES.OPEN
+                : state.status;
+            engine.updateState({
+              currentIndex: qIndex,
+              status: nextStatus
+            });
+          });
+          questionSelectorList.appendChild(item);
+        });
+      });
+
+      // Eventos de cambio de estado
+      stageButtons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetStatus = btn.getAttribute("data-set-status");
+          engine.updateState({ status: targetStatus });
+        });
+      });
+
+      btnPrevQ.addEventListener("click", () => {
+        if (!currentSnap) return;
+        const prevIdx = Math.max(0, currentSnap.state.currentIndex - 1);
+        engine.updateState({
+          currentIndex: prevIdx,
+          status: STATES.OPEN
+        });
+      });
+
+      btnNextQ.addEventListener("click", () => {
+        if (!currentSnap) return;
+        const { state, questions } = currentSnap;
+        if (state.currentIndex < questions.length - 1) {
+          engine.updateState({
+            currentIndex: state.currentIndex + 1,
+            status: STATES.OPEN
+          });
+        } else {
+          engine.updateState({
+            status: STATES.FINAL
+          });
+        }
+      });
+
+      btnToggleQR.addEventListener("click", () => {
+        if (!currentSnap) return;
+        engine.updateState({
+          showQRModal: !currentSnap.state.showQRModal
+        });
+      });
+
+      btnResetQuestion.addEventListener("click", async () => {
+        if (!currentSnap || !currentSnap.currentQuestion) return;
+        const qNum = currentSnap.state.currentIndex + 1;
+        if (confirm(`¿Seguro que querés borrar los votos de la Frase #${qNum} y reabrir su votación?`)) {
+          await engine.resetQuestionVotes(currentSnap.currentQuestion.id);
+          await engine.updateState({ status: STATES.OPEN });
+        }
+      });
+
+      btnResetSession.addEventListener("click", async () => {
+        if (
+          confirm(
+            "¿Reiniciar TODA la sesión? Se borrarán los votos de las 9 frases y la pantalla proyectada volverá a la portada de ingreso."
+          )
+        ) {
+          await engine.resetEntireSession();
+        }
+      });
+
+      // Simulador de votos
+      btnSim10.addEventListener("click", () => {
+        engine.simulateVotesForCurrentQuestion(15, 0.52);
+      });
+
+      btnSim40.addEventListener("click", () => {
+        engine.simulateVotesForCurrentQuestion(40, 0.48);
+      });
+
+      btnSimAll.addEventListener("click", async () => {
+        await engine.simulateAllQuestionsVotes(35);
+      });
+
+      // Configuración de URL del QR
+      btnSaveUrl.addEventListener("click", () => {
+        engine.setParticipantUrl(inputParticipantUrl.value);
+        lastQrUrl = "";
+        refreshAdminQR();
+      });
+
+      btnResetUrl.addEventListener("click", () => {
+        engine.setParticipantUrl("");
+        lastQrUrl = "";
+        refreshAdminQR();
+      });
+
+      // Editor de preguntas
+      btnToggleEditor.addEventListener("click", () => {
+        if (!currentSnap) return;
+        textareaQuestionsJson.value = JSON.stringify(currentSnap.questions, null, 2);
+        editorModal.classList.remove("hidden");
+      });
+
+      btnCloseEditor.addEventListener("click", () => {
+        editorModal.classList.add("hidden");
+      });
+
+      btnSaveCustomQuestions.addEventListener("click", async () => {
+        try {
+          const parsed = JSON.parse(textareaQuestionsJson.value);
+          if (!Array.isArray(parsed) || parsed.length === 0) {
+            alert("El JSON debe ser una lista (array) con al menos una frase.");
+            return;
+          }
+          await engine.saveCustomQuestions(parsed);
+          editorModal.classList.add("hidden");
+        } catch (e) {
+          alert("Error de formato JSON: " + e.message);
+        }
+      });
+
+      btnRestoreDefaultQuestions.addEventListener("click", async () => {
+        if (confirm("¿Restaurar las 9 frases originales definidas en questions.js?")) {
+          await engine.saveCustomQuestions(null);
+          editorModal.classList.add("hidden");
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
