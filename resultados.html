@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>¿Autor, IA o cita trucha? — Pantalla Proyectada</title>
+  <title>¿Autor o IA? — Pantalla Proyectada</title>
   <link rel="stylesheet" href="styles.css" />
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -19,11 +19,24 @@
     <span id="connText">Conectado</span>
   </div>
 
-  <!-- Barra superior minimalista -->
+  <!-- Barra superior minimalista + Controles discretos para el proyector -->
   <header class="projector-topbar">
     <div id="topBrand" class="projector-brand">
-      ¿Autor, IA o cita trucha?
+      ¿Autor o IA?
     </div>
+
+    <!-- Barra rápida discreta en el proyector para cambiar de estado con un clic o con teclado -->
+    <div class="projector-quick-controls" title="También podés usar las flechas del teclado o las teclas 1 a 6">
+      <button type="button" class="proj-ctrl-btn" data-proj-status="waiting">1. QR</button>
+      <button type="button" class="proj-ctrl-btn" data-proj-status="open">2. Votación</button>
+      <button type="button" class="proj-ctrl-btn" data-proj-status="closed">3. Cerrar</button>
+      <button type="button" class="proj-ctrl-btn" data-proj-status="results">4. Resultados %</button>
+      <button type="button" class="proj-ctrl-btn" data-proj-status="revealed">5. Revelar</button>
+      <button type="button" class="proj-ctrl-btn" id="projBtnPrev" title="Frase anterior">◀</button>
+      <button type="button" class="proj-ctrl-btn" id="projBtnNext" title="Siguiente frase">▶</button>
+      <button type="button" class="proj-ctrl-btn" data-proj-status="final">Resumen Final</button>
+    </div>
+
     <div class="projector-meta-right">
       <div id="projectorRoundBadge" class="projector-round-indicator hidden">
         RONDA 1 / 9
@@ -37,12 +50,12 @@
     <!-- ==================================================================
          ESTADO 1: INGRESO
          ================================================================== -->
-    <section id="stageIntro" class="stage-intro">
+    <section id="stageIntro" class="stage-intro hidden">
       <div>
-        <h1 class="intro-title">¿Autor, IA o cita trucha?</h1>
+        <h1 class="intro-title">¿Autor o IA?</h1>
         <p class="intro-cta">Escaneá el QR y preparate para desconfiar de todo.</p>
         <p class="intro-subtitle">
-          Nueve frases. Tres posibilidades. Una confianza injustificadamente alta en nuestro propio criterio.
+          Nueve frases. Dos posibilidades: pluma humana con fuente verificada o generación artificial.
         </p>
       </div>
 
@@ -59,6 +72,13 @@
       <blockquote id="projectedQuote" class="projector-quote">
         “…”
       </blockquote>
+
+      <!-- Opciones visibles durante la pregunta -->
+      <div id="projectedOptionsHint" class="projected-options-pills">
+        <span id="pillOptionAutor" class="proj-option-pill">📚 AUTOR</span>
+        <span class="proj-option-vs">vs.</span>
+        <span class="proj-option-pill">🤖 IA</span>
+      </div>
 
       <!-- Estado 2 (Votación abierta) y Estado 3 (Votación cerrada) -->
       <div id="statusRow" class="projector-status-row">
@@ -80,7 +100,7 @@
       <div id="barsSection" class="bars-container hidden">
         <div id="barRowAutor" class="result-bar-row">
           <div class="result-bar-label">
-            <span>AUTOR</span>
+            <span id="barLabelAutor">AUTOR</span>
           </div>
           <div class="result-bar-track">
             <div id="barFillAutor" class="result-bar-fill"></div>
@@ -97,25 +117,16 @@
           </div>
           <div id="barPctIa" class="result-bar-pct">0 %</div>
         </div>
-
-        <div id="barRowTrucha" class="result-bar-row">
-          <div class="result-bar-label">
-            <span>CITA TRUCHA</span>
-          </div>
-          <div class="result-bar-track">
-            <div id="barFillTrucha" class="result-bar-fill"></div>
-          </div>
-          <div id="barPctTrucha" class="result-bar-pct">0 %</div>
-        </div>
       </div>
 
-      <!-- Estado 5: Veredicto, Autor/Atribución y Explicación -->
+      <!-- Estado 5: Veredicto, Autor y Fuente Verificada -->
       <div id="revealCallout" class="reveal-callout hidden">
         <div class="reveal-headline">
           <span id="revealVerdictBadge" class="reveal-verdict-pill">📚 ERA AUTOR</span>
           <span id="revealAuthorText" class="reveal-author-name"></span>
         </div>
         <p id="revealExplanationText" class="reveal-explanation"></p>
+        <div id="revealSourceText" class="reveal-source-verified"></div>
       </div>
     </section>
 
@@ -150,12 +161,12 @@
   </main>
 
   <!-- Pie discreto -->
-  <footer class="projector-topbar" style="opacity: 0.55; font-size: 0.85rem;">
-    <span id="footerHint">Nueve frases. Tres posibilidades.</span>
+  <footer class="projector-topbar" style="opacity: 0.6; font-size: 0.85rem;">
+    <span id="footerHint">Atajos de teclado en proyector: [Espacio] Avanzar paso · [1-6] Estados · [◀/▶] Cambiar frase</span>
     <span id="footerRightUrl" style="font-family: var(--font-mono);"></span>
   </footer>
 
-  <!-- Modal QR superpuesto cuando la presentadora activa "Mostrar QR" en medio de una ronda -->
+  <!-- Modal QR superpuesto cuando la presentadora activa "Mostrar QR" -->
   <div id="qrOverlayModal" class="qr-overlay-modal hidden">
     <div class="qr-overlay-content">
       <div class="qr-card-large" style="padding: 22px;">
@@ -192,32 +203,33 @@
 
       const stageQuestion = document.getElementById("stageQuestion");
       const projectedQuote = document.getElementById("projectedQuote");
+      const projectedOptionsHint = document.getElementById("projectedOptionsHint");
+      const pillOptionAutor = document.getElementById("pillOptionAutor");
       const statusRow = document.getElementById("statusRow");
       const badgeOpen = document.getElementById("badgeOpen");
       const badgeClosed = document.getElementById("badgeClosed");
       const liveVotesCount = document.getElementById("liveVotesCount");
 
       const barsSection = document.getElementById("barsSection");
+      const barLabelAutor = document.getElementById("barLabelAutor");
       const barRows = {
         autor: document.getElementById("barRowAutor"),
-        ia: document.getElementById("barRowIa"),
-        trucha: document.getElementById("barRowTrucha")
+        ia: document.getElementById("barRowIa")
       };
       const barFills = {
         autor: document.getElementById("barFillAutor"),
-        ia: document.getElementById("barFillIa"),
-        trucha: document.getElementById("barFillTrucha")
+        ia: document.getElementById("barFillIa")
       };
       const barPcts = {
         autor: document.getElementById("barPctAutor"),
-        ia: document.getElementById("barPctIa"),
-        trucha: document.getElementById("barPctTrucha")
+        ia: document.getElementById("barPctIa")
       };
 
       const revealCallout = document.getElementById("revealCallout");
       const revealVerdictBadge = document.getElementById("revealVerdictBadge");
       const revealAuthorText = document.getElementById("revealAuthorText");
       const revealExplanationText = document.getElementById("revealExplanationText");
+      const revealSourceText = document.getElementById("revealSourceText");
 
       const stageFinal = document.getElementById("stageFinal");
       const finalGlobalPct = document.getElementById("finalGlobalPct");
@@ -231,8 +243,13 @@
       const modalQrContainer = document.getElementById("modalQrContainer");
       const modalQrUrlText = document.getElementById("modalQrUrlText");
 
+      const projStatusButtons = document.querySelectorAll("[data-proj-status]");
+      const projBtnPrev = document.getElementById("projBtnPrev");
+      const projBtnNext = document.getElementById("projBtnNext");
+
       let lastRenderedUrl = "";
       let lastStatus = null;
+      let latestSnap = null;
 
       engine.init();
 
@@ -263,6 +280,7 @@
       }
 
       engine.subscribe((snap) => {
+        latestSnap = snap;
         updateQRCodes();
 
         const { state, questions, currentQuestion, currentQuestionStats, globalSummary } = snap;
@@ -270,7 +288,15 @@
         const roundNumber = state.currentIndex + 1;
         const totalQuestions = questions.length;
 
-        // Mostrar u ocultar modal de QR superpuesto si la presentadora lo activó
+        // Resaltar botón activo en la barra superior del proyector
+        projStatusButtons.forEach((btn) => {
+          if (btn.getAttribute("data-proj-status") === status) {
+            btn.classList.add("active");
+          } else {
+            btn.classList.remove("active");
+          }
+        });
+
         if (state.showQRModal && status !== STATES.WAITING) {
           qrOverlayModal.classList.remove("hidden");
         } else {
@@ -307,13 +333,16 @@
             const row = document.createElement("div");
             row.className = "final-q-item";
 
-            const meta = CATEGORY_META[item.question.correct] || CATEGORY_META.autor;
+            const isIa = item.question.correct === "ia";
+            const badgeLabel = isIa
+              ? "🤖 IA"
+              : `📚 ${item.question.author || item.question.claimedAuthor}`;
 
             row.innerHTML = `
               <div class="final-q-quote" title="${item.question.quote.replace(/"/g, '&quot;')}">
                 <strong>#${item.index}</strong> “${item.question.quote}”
               </div>
-              <span class="final-q-tag">${meta.emoji} ${meta.label}</span>
+              <span class="final-q-tag">${badgeLabel}</span>
               <span class="final-q-pct">${item.stats.accuracyPct} %</span>
             `;
             finalQuestionsList.appendChild(row);
@@ -334,11 +363,15 @@
         projectorRoundBadge.classList.remove("hidden");
 
         projectedQuote.textContent = `“${currentQuestion.quote}”`;
+        const authorFullLabel = engine.getAuthorOptionLabel(currentQuestion);
+        pillOptionAutor.textContent = `📚 ${authorFullLabel}`;
+        barLabelAutor.textContent = authorFullLabel;
         liveVotesCount.textContent = currentQuestionStats.total;
 
         // Estado 2: Votación abierta
         if (status === STATES.OPEN) {
           projectedQuote.classList.remove("compact");
+          projectedOptionsHint.classList.remove("hidden");
           statusRow.classList.remove("hidden");
           badgeOpen.classList.remove("hidden");
           badgeClosed.classList.add("hidden");
@@ -350,6 +383,7 @@
         // Estado 3: Votación cerrada (suspenso)
         else if (status === STATES.CLOSED) {
           projectedQuote.classList.remove("compact");
+          projectedOptionsHint.classList.remove("hidden");
           statusRow.classList.remove("hidden");
           badgeOpen.classList.add("hidden");
           badgeClosed.classList.remove("hidden");
@@ -361,28 +395,30 @@
         // Estado 4: Resultados (barras horizontales grandes animadas, sin revelar cuál es correcta)
         else if (status === STATES.RESULTS) {
           projectedQuote.classList.add("compact");
+          projectedOptionsHint.classList.add("hidden");
           statusRow.classList.add("hidden");
           barsSection.classList.remove("hidden");
           revealCallout.classList.add("hidden");
 
-          ["autor", "ia", "trucha"].forEach((key) => {
+          ["autor", "ia"].forEach((key) => {
             barRows[key].classList.remove("is-correct-choice", "is-dimmed");
           });
 
           animateBarsTo(currentQuestionStats.pct, lastStatus !== STATES.RESULTS);
         }
 
-        // Estado 5: Revelación (destaca opción correcta + autor/atribución + explicación)
+        // Estado 5: Revelación (destaca opción correcta + autor + fuente verificada)
         else if (status === STATES.REVEALED) {
           projectedQuote.classList.add("compact");
+          projectedOptionsHint.classList.add("hidden");
           statusRow.classList.add("hidden");
           barsSection.classList.remove("hidden");
           revealCallout.classList.remove("hidden");
 
           animateBarsTo(currentQuestionStats.pct, false);
 
-          const correctKey = currentQuestion.correct;
-          ["autor", "ia", "trucha"].forEach((key) => {
+          const correctKey = currentQuestion.correct === "ia" ? "ia" : "autor";
+          ["autor", "ia"].forEach((key) => {
             if (key === correctKey) {
               barRows[key].classList.add("is-correct-choice");
               barRows[key].classList.remove("is-dimmed");
@@ -392,28 +428,25 @@
             }
           });
 
-          const meta = CATEGORY_META[correctKey] || CATEGORY_META.autor;
-          revealVerdictBadge.textContent = meta.revealBadge;
-
           if (correctKey === "autor") {
-            revealAuthorText.textContent = currentQuestion.author || "";
-          } else if (correctKey === "trucha") {
-            const attr = currentQuestion.author || "";
-            revealAuthorText.textContent = attr.toLowerCase().includes("atribu")
-              ? attr
-              : `Atribuida habitualmente a ${attr}`;
+            revealVerdictBadge.textContent = `📚 ERA AUTOR (${currentQuestion.author || currentQuestion.claimedAuthor})`;
+            revealAuthorText.textContent = "";
           } else {
-            revealAuthorText.textContent = "Generada por Inteligencia Artificial";
+            revealVerdictBadge.textContent = "🤖 ERA IA";
+            revealAuthorText.textContent = `(No era de ${currentQuestion.claimedAuthor})`;
           }
 
           revealExplanationText.textContent = currentQuestion.explanation || "";
+          revealSourceText.textContent = currentQuestion.source
+            ? `📖 Fuente verificada: ${currentQuestion.source}`
+            : "";
         }
 
         lastStatus = status;
       });
 
       function resetBarStyles() {
-        ["autor", "ia", "trucha"].forEach((key) => {
+        ["autor", "ia"].forEach((key) => {
           barFills[key].style.width = "0%";
           barPcts[key].textContent = "0 %";
           barRows[key].classList.remove("is-correct-choice", "is-dimmed");
@@ -422,24 +455,84 @@
 
       function animateBarsTo(pctObj, fromZero) {
         if (fromZero) {
-          ["autor", "ia", "trucha"].forEach((key) => {
+          ["autor", "ia"].forEach((key) => {
             barFills[key].style.width = "0%";
           });
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-              ["autor", "ia", "trucha"].forEach((key) => {
+              ["autor", "ia"].forEach((key) => {
                 barFills[key].style.width = `${pctObj[key]}%`;
                 barPcts[key].textContent = `${pctObj[key]} %`;
               });
             });
           });
         } else {
-          ["autor", "ia", "trucha"].forEach((key) => {
+          ["autor", "ia"].forEach((key) => {
             barFills[key].style.width = `${pctObj[key]}%`;
             barPcts[key].textContent = `${pctObj[key]} %`;
           });
         }
       }
+
+      // Controles directos en la pantalla proyectada (clics y atajos de teclado)
+      projStatusButtons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const target = btn.getAttribute("data-proj-status");
+          engine.updateState({ status: target });
+        });
+      });
+
+      projBtnPrev.addEventListener("click", () => {
+        if (!latestSnap) return;
+        const prevIdx = Math.max(0, latestSnap.state.currentIndex - 1);
+        engine.updateState({ currentIndex: prevIdx, status: STATES.OPEN });
+      });
+
+      projBtnNext.addEventListener("click", () => {
+        if (!latestSnap) return;
+        const { state, questions } = latestSnap;
+        if (state.currentIndex < questions.length - 1) {
+          engine.updateState({ currentIndex: state.currentIndex + 1, status: STATES.OPEN });
+        } else {
+          engine.updateState({ status: STATES.FINAL });
+        }
+      });
+
+      // Atajos de teclado para manejar directamente desde la computadora conectada al proyector
+      window.addEventListener("keydown", (e) => {
+        if (!latestSnap) return;
+        const { state, questions } = latestSnap;
+
+        if (e.key === "1") engine.updateState({ status: STATES.WAITING });
+        else if (e.key === "2") engine.updateState({ status: STATES.OPEN });
+        else if (e.key === "3") engine.updateState({ status: STATES.CLOSED });
+        else if (e.key === "4") engine.updateState({ status: STATES.RESULTS });
+        else if (e.key === "5") engine.updateState({ status: STATES.REVEALED });
+        else if (e.key === "6") engine.updateState({ status: STATES.FINAL });
+        else if (e.key === "ArrowRight") {
+          if (state.currentIndex < questions.length - 1) {
+            engine.updateState({ currentIndex: state.currentIndex + 1, status: STATES.OPEN });
+          }
+        } else if (e.key === "ArrowLeft") {
+          if (state.currentIndex > 0) {
+            engine.updateState({ currentIndex: state.currentIndex - 1, status: STATES.OPEN });
+          }
+        } else if (e.key === " ") {
+          e.preventDefault();
+          // Barra espaciadora avanza secuencialmente por los estados de la ronda
+          const order = [STATES.WAITING, STATES.OPEN, STATES.CLOSED, STATES.RESULTS, STATES.REVEALED];
+          const curPos = order.indexOf(state.status);
+          if (curPos >= 0 && curPos < order.length - 1) {
+            engine.updateState({ status: order[curPos + 1] });
+          } else if (state.status === STATES.REVEALED) {
+            if (state.currentIndex < questions.length - 1) {
+              engine.updateState({ currentIndex: state.currentIndex + 1, status: STATES.OPEN });
+            } else {
+              engine.updateState({ status: STATES.FINAL });
+            }
+          }
+        }
+      });
     })();
   </script>
 </body>

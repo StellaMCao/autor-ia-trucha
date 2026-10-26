@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Panel de Administración — ¿Autor, IA o cita trucha?</title>
+  <title>Panel de Administración — ¿Autor o IA?</title>
   <link rel="stylesheet" href="styles.css" />
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -21,7 +21,7 @@
 
   <header class="admin-header">
     <div class="admin-title-group">
-      <h1>Panel de Control · ¿Autor, IA o cita trucha?</h1>
+      <h1>Panel de Control · ¿Autor o IA?</h1>
       <p>Control en vivo para la presentadora · Sincronizado en tiempo real</p>
     </div>
 
@@ -38,11 +38,11 @@
     </div>
   </header>
 
-  <!-- Telemetría compacta requerida -->
+  <!-- Telemetría compacta -->
   <section class="admin-telemetry-bar">
     <div class="telemetry-card">
       <div class="telemetry-label">Estado actual</div>
-      <div id="telStatus" class="telemetry-value">Esperando</div>
+      <div id="telStatus" class="telemetry-value">Votación abierta</div>
     </div>
     <div class="telemetry-card">
       <div class="telemetry-label">Pregunta actual</div>
@@ -96,7 +96,7 @@
           <button type="button" class="stage-step-btn" data-set-status="revealed">
             <span class="stage-step-num">ESTADO 5</span>
             <span class="stage-step-name">Revelar respuesta</span>
-            <span class="stage-step-desc">Destaca opción + explicación</span>
+            <span class="stage-step-desc">Destaca opción + fuente</span>
           </button>
 
           <button type="button" class="stage-step-btn" data-set-status="final">
@@ -128,32 +128,29 @@
       <!-- Panel 2: Detalle de la frase activa y machete para la presentadora -->
       <section class="admin-panel">
         <div class="admin-panel-title">
-          <span>2. Frase seleccionada (vista y notas para la presentadora)</span>
+          <span>2. Frase seleccionada (vista y fuentes verificadas)</span>
           <span id="adminRoundPill" style="color: var(--accent-primary);">Frase #1</span>
         </div>
 
         <div class="admin-current-quote-card">
           <div id="adminQuoteText" class="admin-quote-text">“…”</div>
           <div class="admin-secret-meta">
+            <div>Opción mostrada: <strong id="adminClaimedAuthor" style="color: var(--text-primary);">—</strong></div>
             <div>Respuesta correcta: <span id="adminSecretCorrect" class="admin-secret-badge">—</span></div>
-            <div>Autor / Atribución: <strong id="adminSecretAuthor" style="color: var(--text-primary);">—</strong></div>
           </div>
           <div id="adminSecretExplanation" style="margin-top: 8px; font-size: 0.88rem; color: var(--text-secondary);"></div>
+          <div id="adminSecretSource" style="margin-top: 6px; font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent-primary);"></div>
         </div>
 
-        <!-- Monitoreo en vivo de votos de esta pregunta (visible para la presentadora) -->
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+        <!-- Monitoreo en vivo de votos de esta pregunta -->
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
           <div class="telemetry-card">
-            <div class="telemetry-label">📚 Votos AUTOR</div>
+            <div id="adminLabelAutorCard" class="telemetry-label">📚 Votos AUTOR</div>
             <div id="adminStatAutor" class="telemetry-value">0 (0 %)</div>
           </div>
           <div class="telemetry-card">
             <div class="telemetry-label">🤖 Votos IA</div>
             <div id="adminStatIa" class="telemetry-value">0 (0 %)</div>
-          </div>
-          <div class="telemetry-card">
-            <div class="telemetry-label">🎭 Votos CITA TRUCHA</div>
-            <div id="adminStatTrucha" class="telemetry-value">0 (0 %)</div>
           </div>
         </div>
       </section>
@@ -205,9 +202,9 @@
           </div>
           <div style="flex: 1;">
             <label for="inputParticipantUrl" style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 6px;">
-              URL pública a la que apunta el QR (se detecta sola en GitHub Pages):
+              URL pública a la que apunta el QR:
             </label>
-            <input type="url" id="inputParticipantUrl" class="input-field" placeholder="https://tu-usuario.github.io/autor-ia-trucha/" />
+            <input type="url" id="inputParticipantUrl" class="input-field" placeholder="https://stellamcao.github.io/autor-ia-trucha/" />
             <div style="display: flex; gap: 8px; margin-top: 8px;">
               <button type="button" id="btnSaveUrl" class="btn" style="padding: 6px 12px; font-size: 0.8rem;">
                 Actualizar QR
@@ -226,7 +223,7 @@
           <span>Reinicio general de sesión</span>
         </div>
         <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px;">
-          Borra todos los votos de todas las preguntas, vuelve a la Frase #1 en estado de ingreso y permite que los mismos dispositivos vuelvan a votar desde cero.
+          Borra todos los votos de todas las preguntas, vuelve a la Frase #1 y permite que los mismos dispositivos vuelvan a votar desde cero.
         </p>
         <button type="button" id="btnResetSession" class="btn btn-danger" style="width: 100%;">
           🗑️ Reiniciar toda la sesión (borrar todos los votos)
@@ -235,7 +232,7 @@
     </div>
   </div>
 
-  <!-- Modal opcional para editar/reordenar frases desde la interfaz si la presentadora quiere cambiar algo al vuelo -->
+  <!-- Modal opcional para editar/reordenar frases -->
   <div id="editorModal" class="qr-overlay-modal hidden">
     <div class="admin-panel" style="width: 100%; max-width: 860px; max-height: 90vh; display: flex; flex-direction: column;">
       <div class="admin-panel-title">
@@ -243,7 +240,7 @@
         <button type="button" id="btnCloseEditor" class="btn">Cerrar ✕</button>
       </div>
       <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 10px;">
-        Podés editar permanentemente el archivo <code>questions.js</code> en tu repositorio, o modificar/reordenar las frases acá mismo para esta sesión:
+        Podés editar permanentemente el archivo <code>questions.js</code> en tu repositorio, o modificar/reordenar las frases acá mismo:
       </p>
       <textarea id="textareaQuestionsJson" class="input-field" style="flex: 1; min-height: 360px; font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.4;"></textarea>
       <div style="display: flex; justify-content: space-between; margin-top: 14px;">
@@ -292,13 +289,14 @@
 
       const adminRoundPill = document.getElementById("adminRoundPill");
       const adminQuoteText = document.getElementById("adminQuoteText");
+      const adminClaimedAuthor = document.getElementById("adminClaimedAuthor");
       const adminSecretCorrect = document.getElementById("adminSecretCorrect");
-      const adminSecretAuthor = document.getElementById("adminSecretAuthor");
       const adminSecretExplanation = document.getElementById("adminSecretExplanation");
+      const adminSecretSource = document.getElementById("adminSecretSource");
 
+      const adminLabelAutorCard = document.getElementById("adminLabelAutorCard");
       const adminStatAutor = document.getElementById("adminStatAutor");
       const adminStatIa = document.getElementById("adminStatIa");
-      const adminStatTrucha = document.getElementById("adminStatTrucha");
 
       const questionSelectorList = document.getElementById("questionSelectorList");
 
@@ -334,7 +332,7 @@
         } else if (mode === "local") {
           connBanner.classList.remove("hidden", "offline");
           connBanner.classList.add("demo-mode");
-          connText.textContent = "Modo Demo Local (Sin configurar Firebase)";
+          connText.textContent = "Modo Demo Local";
         } else {
           connBanner.classList.add("hidden");
         }
@@ -356,13 +354,11 @@
         const idx = state.currentIndex;
         const totalQ = questions.length;
 
-        // Telemetría superior
         telStatus.textContent = STATUS_LABELS[state.status] || state.status;
         telQuestion.textContent = `${idx + 1} / ${totalQ}`;
         telCurrentVotes.textContent = currentQuestionStats ? currentQuestionStats.total : 0;
         telTotalVotes.textContent = globalSummary.totalVotesAll;
 
-        // Estado del botón Mostrar QR
         if (state.showQRModal) {
           btnToggleQR.classList.add("btn-active-toggle");
           btnToggleQR.textContent = "📱 Ocultar QR superpuesto";
@@ -371,7 +367,6 @@
           btnToggleQR.textContent = "📱 Mostrar QR en proyector";
         }
 
-        // Botones de estado
         stageButtons.forEach((btn) => {
           const st = btn.getAttribute("data-set-status");
           if (st === state.status) {
@@ -387,22 +382,28 @@
             ? `Siguiente frase (#${idx + 2}) y abrir votación →`
             : `Ir al Resumen Final →`;
 
-        // Datos de la pregunta actual
         if (currentQuestion && currentQuestionStats) {
           adminRoundPill.textContent = `Frase #${idx + 1} (ID ${currentQuestion.id})`;
           adminQuoteText.textContent = `“${currentQuestion.quote}”`;
 
-          const meta = CATEGORY_META[currentQuestion.correct] || CATEGORY_META.autor;
-          adminSecretCorrect.textContent = `${meta.emoji} ${meta.label}`;
-          adminSecretAuthor.textContent = currentQuestion.author || "Ninguno";
-          adminSecretExplanation.textContent = currentQuestion.explanation || "";
+          const authorLabel = engine.getAuthorOptionLabel(currentQuestion);
+          adminClaimedAuthor.textContent = `${authorLabel} vs. IA`;
 
+          const isIa = currentQuestion.correct === "ia";
+          adminSecretCorrect.textContent = isIa
+            ? "🤖 IA"
+            : `📚 ${authorLabel}`;
+
+          adminSecretExplanation.textContent = currentQuestion.explanation || "";
+          adminSecretSource.textContent = currentQuestion.source
+            ? `📖 Fuente verificada: ${currentQuestion.source}`
+            : "";
+
+          adminLabelAutorCard.textContent = `📚 Votos ${authorLabel}`;
           adminStatAutor.textContent = `${currentQuestionStats.counts.autor} (${currentQuestionStats.pct.autor} %)`;
           adminStatIa.textContent = `${currentQuestionStats.counts.ia} (${currentQuestionStats.pct.ia} %)`;
-          adminStatTrucha.textContent = `${currentQuestionStats.counts.trucha} (${currentQuestionStats.pct.trucha} %)`;
         }
 
-        // Lista de selección de preguntas
         questionSelectorList.innerHTML = "";
         questions.forEach((q, qIndex) => {
           const qVotesObj = (snap.votesByQuestion && snap.votesByQuestion[q.id]) || {};
@@ -416,7 +417,6 @@
             <span class="q-select-votes">${qStats.total} v.</span>
           `;
           item.addEventListener("click", () => {
-            // Al seleccionar una pregunta desde la lista, si estaba en waiting o final pasamos a open, o mantenemos open
             const nextStatus =
               state.status === STATES.WAITING || state.status === STATES.FINAL
                 ? STATES.OPEN
@@ -430,7 +430,6 @@
         });
       });
 
-      // Eventos de cambio de estado
       stageButtons.forEach((btn) => {
         btn.addEventListener("click", () => {
           const targetStatus = btn.getAttribute("data-set-status");
@@ -481,27 +480,26 @@
       btnResetSession.addEventListener("click", async () => {
         if (
           confirm(
-            "¿Reiniciar TODA la sesión? Se borrarán los votos de las 9 frases y la pantalla proyectada volverá a la portada de ingreso."
+            "¿Reiniciar TODA la sesión? Se borrarán los votos de las 9 frases y se abrirá la Frase #1."
           )
         ) {
           await engine.resetEntireSession();
+          await engine.updateState({ status: STATES.OPEN, currentIndex: 0 });
         }
       });
 
-      // Simulador de votos
       btnSim10.addEventListener("click", () => {
-        engine.simulateVotesForCurrentQuestion(15, 0.52);
+        engine.simulateVotesForCurrentQuestion(15, 0.58);
       });
 
       btnSim40.addEventListener("click", () => {
-        engine.simulateVotesForCurrentQuestion(40, 0.48);
+        engine.simulateVotesForCurrentQuestion(40, 0.55);
       });
 
       btnSimAll.addEventListener("click", async () => {
         await engine.simulateAllQuestionsVotes(35);
       });
 
-      // Configuración de URL del QR
       btnSaveUrl.addEventListener("click", () => {
         engine.setParticipantUrl(inputParticipantUrl.value);
         lastQrUrl = "";
@@ -514,7 +512,6 @@
         refreshAdminQR();
       });
 
-      // Editor de preguntas
       btnToggleEditor.addEventListener("click", () => {
         if (!currentSnap) return;
         textareaQuestionsJson.value = JSON.stringify(currentSnap.questions, null, 2);

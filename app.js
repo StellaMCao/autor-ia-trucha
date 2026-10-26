@@ -1,31 +1,30 @@
 /**
  * LÓGICA CENTRAL Y SINCRONIZACIÓN EN TIEMPO REAL
- * ¿Autor, IA o cita trucha?
+ * ¿Autor o IA?
  * 
  * Soporta:
  * 1. Firebase Realtime Database (para producción con celulares del público).
- * 2. Sincronización Local multi-pestaña (BroadcastChannel + localStorage) cuando
- *    Firebase aún no fue configurado o para modo de prueba rápido.
+ * 2. Sincronización Local multi-pestaña (BroadcastChannel + localStorage) de respaldo.
  */
 
 (function () {
-  const STORAGE_KEY_LOCAL_DB = "ait_local_db_v1";
-  const STORAGE_KEY_DEVICE_ID = "ait_device_id_v1";
-  const STORAGE_KEY_CUSTOM_QUESTIONS = "ait_custom_questions_v1";
-  const STORAGE_KEY_VOTED_CACHE = "ait_voted_cache_v1";
+  const STORAGE_KEY_LOCAL_DB = "ait_local_db_v2";
+  const STORAGE_KEY_DEVICE_ID = "ait_device_id_v2";
+  const STORAGE_KEY_CUSTOM_QUESTIONS = "ait_custom_questions_v2";
+  const STORAGE_KEY_VOTED_CACHE = "ait_voted_cache_v2";
 
   // Estados posibles de la sesión
   const STATES = {
-    WAITING: "waiting",       // Estado 1: Ingreso / Esperando la próxima frase
+    WAITING: "waiting",       // Estado 1: Ingreso / QR grande
     OPEN: "open",             // Estado 2: Votación abierta
     CLOSED: "closed",         // Estado 3: Votación cerrada (suspenso)
     RESULTS: "results",       // Estado 4: Resultados (barras horizontales neutras)
-    REVEALED: "revealed",     // Estado 5: Revelación de respuesta correcta y explicación
-    FINAL: "final"            // Resultado final de las frases
+    REVEALED: "revealed",     // Estado 5: Revelación de respuesta correcta y fuente verificada
+    FINAL: "final"            // Resultado final de las 9 frases
   };
 
   const DEFAULT_SESSION_STATE = {
-    status: STATES.WAITING,
+    status: STATES.OPEN,
     currentIndex: 0,
     showQRModal: false,
     sessionId: "sess_initial",
@@ -64,7 +63,7 @@
             window.firebase.initializeApp(cfg);
           }
           this.db = window.firebase.database();
-          const path = window.FIREBASE_DB_PATH || "autor_ia_trucha_session";
+          const path = window.FIREBASE_DB_PATH || "ficcionario/autor_ia_trucha_session";
           this.rootRef = this.db.ref(path);
           this.mode = "firebase";
           this._setupFirebaseListeners();
@@ -79,7 +78,6 @@
     }
 
     _setupFirebaseListeners() {
-      // Estado de conexión de Firebase
       const connectedRef = this.db.ref(".info/connected");
       connectedRef.on("value", (snap) => {
         this.isConnected = snap.val() === true;
@@ -109,7 +107,7 @@
       this._loadFromLocalStorage();
 
       if (typeof BroadcastChannel !== "undefined") {
-        this.channel = new BroadcastChannel("autor_ia_trucha_channel");
+        this.channel = new BroadcastChannel("autor_ia_channel_v2");
         this.channel.onmessage = () => {
           this._loadFromLocalStorage();
           this._notify();
@@ -233,36 +231,40 @@
       };
     }
 
+    // Etiqueta dinámica con el nombre del autor para una pregunta dada
+    getAuthorOptionLabel(question) {
+      if (!question) return "AUTOR";
+      const name = question.claimedAuthor || (question.correct === "autor" ? question.author : null);
+      if (name && name.toLowerCase() !== "ninguno" && name.toLowerCase() !== "inteligencia artificial") {
+        return `AUTOR (${name})`;
+      }
+      return "AUTOR";
+    }
+
     computeQuestionStats(question, questionVotesObj) {
       const entries = Object.values(questionVotesObj || {});
-      const counts = { autor: 0, ia: 0, trucha: 0 };
+      const counts = { autor: 0, ia: 0 };
 
       entries.forEach((v) => {
         const choice = typeof v === "string" ? v : v && v.choice;
-        if (choice && counts.hasOwnProperty(choice)) {
+        if (choice === "autor" || choice === "ia") {
           counts[choice]++;
         }
       });
 
-      const total = counts.autor + counts.ia + counts.trucha;
+      const total = counts.autor + counts.ia;
       const pct = {
         autor: total > 0 ? Math.round((counts.autor / total) * 100) : 0,
-        ia: total > 0 ? Math.round((counts.ia / total) * 100) : 0,
-        trucha: total > 0 ? Math.round((counts.trucha / total) * 100) : 0
+        ia: total > 0 ? Math.round((counts.ia / total) * 100) : 0
       };
 
-      // Ajuste fino para que la suma de porcentajes cerrados dé exactamente 100% cuando total > 0
-      if (total > 0) {
-        const sum = pct.autor + pct.ia + pct.trucha;
-        if (sum !== 100) {
-          const maxKey = ["autor", "ia", "trucha"].reduce((a, b) =>
-            counts[a] >= counts[b] ? a : b
-          );
-          pct[maxKey] += 100 - sum;
-        }
+      // Ajuste para que autor + ia sume exactamente 100% cuando hay votos
+      if (total > 0 && pct.autor + pct.ia !== 100) {
+        pct.ia = 100 - pct.autor;
       }
 
-      const correctCount = counts[question.correct] || 0;
+      const correctChoice = question.correct === "ia" ? "ia" : "autor";
+      const correctCount = counts[correctChoice] || 0;
       const accuracyPct = total > 0 ? Math.round((correctCount / total) * 100) : 0;
 
       return {
@@ -270,7 +272,7 @@
         total,
         counts,
         pct,
-        correctChoice: question.correct,
+        correctChoice,
         correctCount,
         accuracyPct
       };
@@ -320,38 +322,37 @@
         return {
           range: "0–33 %",
           title: "Paranoia epistemológica insuficiente",
-          subtitle: "Confiaron demasiado en las comillas solemnes. Cualquier bot con vocabulario filosófico les vende un buzón."
+          subtitle: "Confiaron demasiado en las comillas solemnes. Cualquier modelo con vocabulario filosófico les vende un aforismo."
         };
       }
       if (pct <= 50) {
         return {
           range: "34–50 %",
           title: "Apenas mejor que desconfiar al azar",
-          subtitle: "Una moneda tirada al aire habría tenido crisis existenciales parecidas, pero van por buen camino."
+          subtitle: "Una moneda tirada al aire habría tenido dudas existenciales parecidas, pero van por buen camino."
         };
       }
       if (pct <= 70) {
         return {
           range: "51–70 %",
           title: "Detectives digitales en entrenamiento",
-          subtitle: "Buen olfato para las falsificaciones virales, aunque algún aforismo sintético logró infiltrarse."
+          subtitle: "Buen oído para el estilo clásico, aunque algún aforismo sintético logró infiltrarse."
         };
       }
       if (pct <= 85) {
         return {
           range: "71–85 %",
           title: "Alarmantemente desconfiados",
-          subtitle: "Excelente radar crítico. Probablemente revisan la fuente hasta de los saludos de cumpleaños."
+          subtitle: "Excelente radar crítico. Distinguen la pluma humana del cálculo estadístico con precisión."
         };
       }
       return {
         range: "86–100 %",
         title: "O son muy buenos o ya habían visto las respuestas",
-        subtitle: "Nivel supremo de escepticismo ilustrado. Ni Nietzsche, ni Wilde ni el modelo de lenguaje pudieron engañarlos."
+        subtitle: "Nivel supremo de escepticismo ilustrado. Ni Nietzsche, ni Borges ni el modelo de lenguaje pudieron engañarlos."
       };
     }
 
-    // Identificador local anónimo único por dispositivo
     getDeviceId() {
       try {
         let id = localStorage.getItem(STORAGE_KEY_DEVICE_ID);
@@ -372,7 +373,6 @@
       }
     }
 
-    // Verifica si este dispositivo ya votó en la pregunta actual (en esta sesión)
     getDeviceVote(questionId) {
       const deviceId = this.getDeviceId();
       const qVotes = (this.data.votes && this.data.votes[questionId]) || {};
@@ -382,7 +382,6 @@
           : qVotes[deviceId].choice;
       }
 
-      // Respaldo en localStorage por si está cargando la red
       try {
         const cache = JSON.parse(localStorage.getItem(STORAGE_KEY_VOTED_CACHE) || "{}");
         const sessionKey = (this.data.state && this.data.state.sessionId) || "default";
@@ -408,15 +407,13 @@
       } catch (e) {}
     }
 
-    // Registrar voto de participante
     async submitVote(questionId, choice, customVoterId = null) {
-      if (!["autor", "ia", "trucha"].includes(choice)) {
+      if (!["autor", "ia"].includes(choice)) {
         throw new Error("Opción de voto inválida");
       }
 
       const voterId = customVoterId || this.getDeviceId();
 
-      // Si es el participante real (sin customVoterId), impedir voto repetido
       if (!customVoterId && this.getDeviceVote(questionId)) {
         return { alreadyVoted: true };
       }
@@ -445,7 +442,6 @@
       return { success: true };
     }
 
-    // Acciones de Administración
     async updateState(partialState) {
       const nextState = {
         ...(this.data.state || DEFAULT_SESSION_STATE),
@@ -504,22 +500,19 @@
       }
     }
 
-    // Simulador de votos para modo de prueba sin necesitar varios celulares
-    async simulateVotesForCurrentQuestion(count = 25, accuracyBias = 0.48) {
+    async simulateVotesForCurrentQuestion(count = 20, accuracyBias = 0.58) {
       const snap = this.getSnapshot();
       const q = snap.currentQuestion;
       if (!q) return;
 
-      const options = ["autor", "ia", "trucha"];
-      const wrongOptions = options.filter((o) => o !== q.correct);
+      const correctChoice = q.correct === "ia" ? "ia" : "autor";
+      const wrongChoice = correctChoice === "autor" ? "ia" : "autor";
       const batch = {};
 
       for (let i = 0; i < count; i++) {
         const botId = `sim_${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${i}`;
         const isCorrect = Math.random() < accuracyBias;
-        const choice = isCorrect
-          ? q.correct
-          : wrongOptions[Math.floor(Math.random() * wrongOptions.length)];
+        const choice = isCorrect ? correctChoice : wrongChoice;
 
         batch[botId] = {
           choice,
@@ -542,22 +535,18 @@
     async simulateAllQuestionsVotes(votersPerQuestion = 35) {
       const questions = this.getQuestions();
       const allVotes = { ...(this.data.votes || {}) };
-
-      // Distintos niveles de dificultad simulada para que el ranking final luzca realista
-      const biases = [0.68, 0.42, 0.29, 0.74, 0.51, 0.35, 0.79, 0.46, 0.24];
+      const biases = [0.74, 0.42, 0.81, 0.68, 0.37, 0.77, 0.85, 0.46, 0.59];
 
       questions.forEach((q, idx) => {
         if (!allVotes[q.id]) allVotes[q.id] = {};
-        const options = ["autor", "ia", "trucha"];
-        const wrongOptions = options.filter((o) => o !== q.correct);
+        const correctChoice = q.correct === "ia" ? "ia" : "autor";
+        const wrongChoice = correctChoice === "autor" ? "ia" : "autor";
         const bias = biases[idx % biases.length];
 
         for (let i = 0; i < votersPerQuestion; i++) {
           const botId = `sim_all_${idx}_${i}_${Math.random().toString(36).substring(2, 6)}`;
           const isCorrect = Math.random() < bias;
-          const choice = isCorrect
-            ? q.correct
-            : wrongOptions[Math.floor(Math.random() * wrongOptions.length)];
+          const choice = isCorrect ? correctChoice : wrongChoice;
           allVotes[q.id][botId] = { choice, simulated: true, ts: Date.now() };
         }
       });
@@ -572,7 +561,6 @@
       }
     }
 
-    // Permite editar/reordenar/agregar frases desde el panel de administración si se desea
     async saveCustomQuestions(newQuestionsArray) {
       try {
         if (newQuestionsArray === null) {
@@ -592,7 +580,6 @@
       }
     }
 
-    // Obtiene la URL pública hacia index.html para generar el código QR automáticamente
     getParticipantUrl() {
       const customUrl = localStorage.getItem("ait_custom_participant_url");
       if (customUrl && customUrl.trim().length > 0) {
@@ -617,7 +604,6 @@
     }
   }
 
-  // Metadatos visuales y de texto para cada opción
   const CATEGORY_META = {
     autor: {
       key: "autor",
@@ -625,7 +611,7 @@
       shortLabel: "Autor real",
       revealBadge: "📚 ERA AUTOR",
       emoji: "📚",
-      description: "Escrita por una persona de carne, hueso y contradicciones."
+      description: "Escrita por una persona real con fuente verificada."
     },
     ia: {
       key: "ia",
@@ -633,19 +619,10 @@
       shortLabel: "Inteligencia Artificial",
       revealBadge: "🤖 ERA IA",
       emoji: "🤖",
-      description: "Generada estadísticamente por un modelo de lenguaje."
-    },
-    trucha: {
-      key: "trucha",
-      label: "CITA TRUCHA",
-      shortLabel: "Cita apócrifa",
-      revealBadge: "🎭 ERA CITA TRUCHA",
-      emoji: "🎭",
-      description: "Falsamente atribuida en internet a una figura famosa."
+      description: "Generada estadísticamente por Inteligencia Artificial."
     }
   };
 
-  // Generador de QR limpio usando SVG o API de respaldo sin dependencias pesadas
   function renderQRCode(containerEl, text, size = 260) {
     if (!containerEl) return;
     containerEl.innerHTML = "";

@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>¿Autor, IA o cita trucha? — Votación en vivo</title>
+  <title>¿Autor o IA? — Votación en vivo</title>
   <link rel="stylesheet" href="styles.css" />
-  <!-- Firebase SDK (compatibilidad estática para GitHub Pages) -->
+  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 </head>
@@ -18,13 +18,13 @@
   </div>
 
   <header class="participant-header">
-    <div class="participant-brand">¿Autor, IA o cita trucha?</div>
+    <div class="participant-brand">¿Autor o IA?</div>
     <div id="roundBadge" class="participant-round-pill hidden">Frase 1 / 9</div>
   </header>
 
   <main class="participant-main">
     <!-- Vista 1: Esperando la próxima frase -->
-    <section id="viewWaiting" class="waiting-card">
+    <section id="viewWaiting" class="waiting-card hidden">
       <div class="pulse-ring"></div>
       <h1 id="waitingTitle" class="waiting-title">Esperando la próxima frase…</h1>
       <p id="waitingSubtitle" class="waiting-sub">
@@ -43,18 +43,13 @@
 
       <div id="voteButtonsContainer" class="vote-buttons-stack">
         <button type="button" class="vote-btn" data-choice="autor">
-          <span>AUTOR</span>
+          <span id="btnAutorLabel" style="text-align: left; line-height: 1.25;">AUTOR</span>
           <span class="vote-btn-icon" aria-hidden="true">📚</span>
         </button>
 
         <button type="button" class="vote-btn" data-choice="ia">
           <span>IA</span>
           <span class="vote-btn-icon" aria-hidden="true">🤖</span>
-        </button>
-
-        <button type="button" class="vote-btn" data-choice="trucha">
-          <span>CITA TRUCHA</span>
-          <span class="vote-btn-icon" aria-hidden="true">🎭</span>
         </button>
       </div>
 
@@ -70,7 +65,7 @@
   </main>
 
   <footer class="participant-footer">
-    Participación anónima en tiempo real · Sin datos personales
+    Participación anónima en tiempo real · Fuentes verificadas
   </footer>
 
   <!-- Configuración, banco de frases y lógica -->
@@ -92,6 +87,7 @@
       const viewVoting = document.getElementById("viewVoting");
       const mobileQuestionLabel = document.getElementById("mobileQuestionLabel");
       const mobileQuoteText = document.getElementById("mobileQuoteText");
+      const btnAutorLabel = document.getElementById("btnAutorLabel");
       const voteButtonsContainer = document.getElementById("voteButtonsContainer");
       const voteRegisteredBox = document.getElementById("voteRegisteredBox");
       const voteButtons = document.querySelectorAll(".vote-btn");
@@ -125,7 +121,6 @@
 
         const existingVote = engine.getDeviceVote(currentQuestion.id);
 
-        // Si el juego está en estado WAITING o FINAL, o si no votó y la ronda ya cerró:
         if (state.status === STATES.WAITING) {
           roundBadge.classList.add("hidden");
           viewVoting.classList.add("hidden");
@@ -146,14 +141,14 @@
           return;
         }
 
-        // Mostrar indicador de ronda
         roundBadge.textContent = `Frase ${roundNum} / ${totalQuestions}`;
         roundBadge.classList.remove("hidden");
 
         mobileQuestionLabel.textContent = `Frase #${roundNum}`;
         mobileQuoteText.textContent = `“${currentQuestion.quote}”`;
+        btnAutorLabel.textContent = engine.getAuthorOptionLabel(currentQuestion);
 
-        // Si ya votó en esta pregunta, mostramos siempre "Voto registrado" sin importar si sigue abierta, cerrada o en resultados
+        // Si ya votó en esta pregunta, mostramos siempre "Voto registrado"
         if (existingVote) {
           viewWaiting.classList.add("hidden");
           viewVoting.classList.remove("hidden");
@@ -162,7 +157,7 @@
           return;
         }
 
-        // Si todavía no votó y la votación está abierta: mostrar los 3 botones grandes
+        // Si todavía no votó y la votación está abierta: mostrar los 2 botones grandes (AUTOR con nombre e IA)
         if (state.status === STATES.OPEN) {
           viewWaiting.classList.add("hidden");
           viewVoting.classList.remove("hidden");
@@ -172,7 +167,7 @@
           return;
         }
 
-        // Si la votación ya se cerró (CLOSED, RESULTS, REVEALED) y la persona no llegó a votar:
+        // Si la votación ya se cerró y la persona no llegó a votar:
         viewVoting.classList.add("hidden");
         viewWaiting.classList.remove("hidden");
         waitingTitle.textContent = "Esperando la próxima frase…";

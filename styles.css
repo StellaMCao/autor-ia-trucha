@@ -521,10 +521,10 @@ button {
 
 .result-bar-row {
   display: grid;
-  grid-template-columns: 260px 1fr 120px;
+  grid-template-columns: minmax(260px, 380px) 1fr 120px;
   align-items: center;
   gap: 24px;
-  padding: 14px 20px;
+  padding: 16px 22px;
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.02);
   border: 2px solid transparent;
@@ -532,13 +532,83 @@ button {
 }
 
 .result-bar-label {
-  font-size: clamp(1.25rem, 1.8vw, 1.85rem);
+  font-size: clamp(1.1rem, 1.55vw, 1.65rem);
   font-weight: 800;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   color: var(--text-primary);
   display: flex;
   align-items: center;
   gap: 12px;
+  line-height: 1.2;
+}
+
+/* Barra de controles discretos en el proyector */
+.projector-quick-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 5px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  opacity: 0.45;
+  transition: opacity 0.2s ease;
+}
+
+.projector-quick-controls:hover {
+  opacity: 1;
+}
+
+.proj-ctrl-btn {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+
+.proj-ctrl-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.proj-ctrl-btn.active {
+  background: var(--accent-primary);
+  color: #090b10;
+}
+
+/* Pastillas de opciones visibles en el proyector durante la pregunta */
+.projected-options-pills {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: -0.5vh;
+}
+
+.proj-option-pill {
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  font-size: clamp(1rem, 1.35vw, 1.4rem);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.proj-option-vs {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.reveal-source-verified {
+  font-family: var(--font-mono);
+  font-size: clamp(0.9rem, 1.15vw, 1.2rem);
+  color: var(--reveal-gold);
+  margin-top: 4px;
 }
 
 .result-bar-track {
