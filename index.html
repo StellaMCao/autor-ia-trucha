@@ -3,8 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>¿Autor o IA? — Votación en vivo</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=3" />
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
@@ -19,11 +22,11 @@
 
   <header class="participant-header">
     <div class="participant-brand">¿Autor o IA?</div>
-    <div id="roundBadge" class="participant-round-pill hidden">Frase 1 / 9</div>
+    <div id="roundBadge" class="participant-round-pill">Frase 1 / 9</div>
   </header>
 
   <main class="participant-main">
-    <!-- Vista 1: Esperando la próxima frase -->
+    <!-- Vista 1: Esperando la próxima frase (oculta por defecto para que abra directo en votación) -->
     <section id="viewWaiting" class="waiting-card hidden">
       <div class="pulse-ring"></div>
       <h1 id="waitingTitle" class="waiting-title">Esperando la próxima frase…</h1>
@@ -32,18 +35,18 @@
       </p>
     </section>
 
-    <!-- Vista 2: Pregunta activa para votar -->
-    <section id="viewVoting" class="hidden">
+    <!-- Vista 2: Pregunta activa para votar (visible de inmediato al cargar) -->
+    <section id="viewVoting">
       <div class="mobile-quote-box">
         <span id="mobileQuestionLabel" class="mobile-question-number">Frase #1</span>
         <blockquote id="mobileQuoteText" class="mobile-quote-text">
-          “…”
+          “Las convicciones son enemigos de la verdad más peligrosos que las mentiras.”
         </blockquote>
       </div>
 
       <div id="voteButtonsContainer" class="vote-buttons-stack">
         <button type="button" class="vote-btn" data-choice="autor">
-          <span id="btnAutorLabel" style="text-align: left; line-height: 1.25;">AUTOR</span>
+          <span id="btnAutorLabel" style="text-align: left; line-height: 1.25;">AUTOR (Friedrich Nietzsche)</span>
           <span class="vote-btn-icon" aria-hidden="true">📚</span>
         </button>
 
@@ -68,10 +71,10 @@
     Participación anónima en tiempo real · Fuentes verificadas
   </footer>
 
-  <!-- Configuración, banco de frases y lógica -->
-  <script src="firebase-config.js"></script>
-  <script src="questions.js"></script>
-  <script src="app.js"></script>
+  <!-- Configuración, banco de frases y lógica con cache-busting -->
+  <script src="firebase-config.js?v=3"></script>
+  <script src="questions.js?v=3"></script>
+  <script src="app.js?v=3"></script>
   <script>
     (function () {
       const { STATES, engine } = window.AIT;
@@ -92,7 +95,7 @@
       const voteRegisteredBox = document.getElementById("voteRegisteredBox");
       const voteButtons = document.querySelectorAll(".vote-btn");
 
-      let currentQuestionId = null;
+      let currentQuestionId = 1;
       let isSubmitting = false;
 
       engine.init();
@@ -157,7 +160,7 @@
           return;
         }
 
-        // Si todavía no votó y la votación está abierta: mostrar los 2 botones grandes (AUTOR con nombre e IA)
+        // Si todavía no votó y la votación está abierta: mostrar los 2 botones grandes
         if (state.status === STATES.OPEN) {
           viewWaiting.classList.add("hidden");
           viewVoting.classList.remove("hidden");

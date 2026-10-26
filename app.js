@@ -3,15 +3,16 @@
  * ¿Autor o IA?
  * 
  * Soporta:
- * 1. Firebase Realtime Database (para producción con celulares del público).
- * 2. Sincronización Local multi-pestaña (BroadcastChannel + localStorage) de respaldo.
+ * 1. Firebase Realtime Database (SDK WebSocket + Respaldo automático HTTP REST
+ *    para celulares donde el navegador o la red bloquee WebSockets).
+ * 2. Sincronización Local multi-pestaña (BroadcastChannel + localStorage).
  */
 
 (function () {
-  const STORAGE_KEY_LOCAL_DB = "ait_local_db_v2";
-  const STORAGE_KEY_DEVICE_ID = "ait_device_id_v2";
-  const STORAGE_KEY_CUSTOM_QUESTIONS = "ait_custom_questions_v2";
-  const STORAGE_KEY_VOTED_CACHE = "ait_voted_cache_v2";
+  const STORAGE_KEY_LOCAL_DB = "ait_local_db_v3";
+  const STORAGE_KEY_DEVICE_ID = "ait_device_id_v3";
+  const STORAGE_KEY_CUSTOM_QUESTIONS = "ait_custom_questions_v3";
+  const STORAGE_KEY_VOTED_CACHE = "ait_voted_cache_v3";
 
   // Estados posibles de la sesión
   const STATES = {
@@ -37,7 +38,9 @@
       this.isConnected = true;
       this.db = null;
       this.rootRef = null;
+      this.restBaseUrl = null;
       this.channel = null;
+      this.pollTimer = null;
 
       this.data = {
         state: { ...DEFAULT_SESSION_STATE },
@@ -57,48 +60,85 @@
         cfg.apiKey &&
         !cfg.apiKey.includes("PEGAR_AQUI");
 
-      if (isConfigured && typeof window.firebase !== "undefined") {
-        try {
-          if (!window.firebase.apps.length) {
-            window.firebase.initializeApp(cfg);
+      if (isConfigured) {
+        const cleanDbUrl = cfg.databaseURL.replace(/\/+$/, "");
+        const path = (window.FIREBASE_DB_PATH || "ficcionario/autor_ia_trucha_session").replace(/^\/+|\/+$/g, "");
+        this.restBaseUrl = `${cleanDbUrl}/${path}`;
+        this.mode = "firebase";
+
+        // 1. Iniciar respaldo HTTP REST inmediato (funciona en cualquier celular aunque falle WebSockets)
+        this._fetchViaRest();
+        this.pollTimer = setInterval(() => this._fetchViaRest(), 2000);
+
+        // 2. Si el SDK de Firebase cargó, conectar también por WebSockets para latencia cero
+        if (typeof window.firebase !== "undefined") {
+          try {
+            if (!window.firebase.apps.length) {
+              window.firebase.initializeApp(cfg);
+            }
+            this.db = window.firebase.database();
+            this.rootRef = this.db.ref(path);
+            this._setupFirebaseListeners();
+          } catch (err) {
+            console.warn("Usando sincronización REST pura para Firebase:", err);
           }
-          this.db = window.firebase.database();
-          const path = window.FIREBASE_DB_PATH || "ficcionario/autor_ia_trucha_session";
-          this.rootRef = this.db.ref(path);
-          this.mode = "firebase";
-          this._setupFirebaseListeners();
-          return;
-        } catch (err) {
-          console.warn("Error inicializando Firebase, usando modo local:", err);
         }
+        return;
       }
 
       this.mode = "local";
       this._setupLocalListeners();
     }
 
+    async _fetchViaRest() {
+      if (!this.restBaseUrl) return;
+      try {
+        const res = await fetch(`${this.restBaseUrl}.json?t=${Date.now()}`, {
+          cache: "no-store"
+        });
+        if (!res.ok) return;
+        const val = (await res.json()) || {};
+        this._applyIncomingData(val);
+        if (!this.isConnected) {
+          this.isConnected = true;
+          this._notifyConnection();
+        }
+      } catch (e) {
+        // Silencioso para no interrumpir si hay microcorte de red móvil
+      }
+    }
+
+    _applyIncomingData(val) {
+      const incomingState = { ...DEFAULT_SESSION_STATE, ...(val.state || {}) };
+      const prevJson = JSON.stringify({ s: this.data.state, v: this.data.votes });
+      this.data = {
+        state: incomingState,
+        votes: val.votes || {},
+        customQuestions: val.customQuestions || null
+      };
+      const nextJson = JSON.stringify({ s: this.data.state, v: this.data.votes });
+      if (prevJson !== nextJson) {
+        this._notify();
+      }
+    }
+
     _setupFirebaseListeners() {
       const connectedRef = this.db.ref(".info/connected");
       connectedRef.on("value", (snap) => {
-        this.isConnected = snap.val() === true;
-        this._notifyConnection();
+        if (snap.val() === true) {
+          this.isConnected = true;
+          this._notifyConnection();
+        }
       });
 
       this.rootRef.on(
         "value",
         (snapshot) => {
           const val = snapshot.val() || {};
-          this.data = {
-            state: { ...DEFAULT_SESSION_STATE, ...(val.state || {}) },
-            votes: val.votes || {},
-            customQuestions: val.customQuestions || null
-          };
-          this._notify();
+          this._applyIncomingData(val);
         },
         (error) => {
-          console.error("Error de lectura en Firebase:", error);
-          this.isConnected = false;
-          this._notifyConnection();
+          console.warn("Fallback a HTTP REST:", error);
         }
       );
     }
@@ -107,7 +147,7 @@
       this._loadFromLocalStorage();
 
       if (typeof BroadcastChannel !== "undefined") {
-        this.channel = new BroadcastChannel("autor_ia_channel_v2");
+        this.channel = new BroadcastChannel("autor_ia_channel_v3");
         this.channel.onmessage = () => {
           this._loadFromLocalStorage();
           this._notify();
@@ -119,15 +159,6 @@
           this._loadFromLocalStorage();
           this._notify();
         }
-      });
-
-      window.addEventListener("online", () => {
-        this.isConnected = true;
-        this._notifyConnection();
-      });
-      window.addEventListener("offline", () => {
-        this.isConnected = false;
-        this._notifyConnection();
       });
 
       setTimeout(() => {
@@ -231,7 +262,6 @@
       };
     }
 
-    // Etiqueta dinámica con el nombre del autor para una pregunta dada
     getAuthorOptionLabel(question) {
       if (!question) return "AUTOR";
       const name = question.claimedAuthor || (question.correct === "autor" ? question.author : null);
@@ -258,7 +288,6 @@
         ia: total > 0 ? Math.round((counts.ia / total) * 100) : 0
       };
 
-      // Ajuste para que autor + ia sume exactamente 100% cuando hay votos
       if (total > 0 && pct.autor + pct.ia !== 100) {
         pct.ia = 100 - pct.autor;
       }
@@ -297,7 +326,6 @@
       const globalAccuracyPct =
         totalVotesAll > 0 ? Math.round((totalCorrectAll / totalVotesAll) * 100) : 0;
 
-      // Ordenar de la más fácil (mayor % de aciertos) a la más engañosa (menor % de aciertos)
       const sortedByDifficulty = [...perQuestion].sort((a, b) => {
         if (b.stats.accuracyPct !== a.stats.accuracyPct) {
           return b.stats.accuracyPct - a.stats.accuracyPct;
@@ -427,8 +455,17 @@
         this._setDeviceVoteCache(questionId, choice);
       }
 
-      if (this.mode === "firebase" && this.rootRef) {
-        await this.rootRef.child(`votes/${questionId}/${voterId}`).set(votePayload);
+      if (this.mode === "firebase" && this.restBaseUrl) {
+        // Actualizar optimísticamente y enviar por REST + SDK
+        if (!this.data.votes[questionId]) this.data.votes[questionId] = {};
+        this.data.votes[questionId][voterId] = votePayload;
+        this._notify();
+
+        await fetch(`${this.restBaseUrl}/votes/${questionId}/${voterId}.json`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(votePayload)
+        });
       } else {
         this._loadFromLocalStorage();
         if (!this.data.votes[questionId]) {
@@ -449,8 +486,15 @@
         updatedAt: Date.now()
       };
 
-      if (this.mode === "firebase" && this.rootRef) {
-        await this.rootRef.child("state").set(nextState);
+      this.data.state = nextState;
+      this._notify();
+
+      if (this.mode === "firebase" && this.restBaseUrl) {
+        await fetch(`${this.restBaseUrl}/state.json`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(nextState)
+        });
       } else {
         this._loadFromLocalStorage();
         this.data.state = nextState;
@@ -461,22 +505,24 @@
 
     async resetQuestionVotes(questionId) {
       this._setDeviceVoteCache(questionId, null);
-      if (this.mode === "firebase" && this.rootRef) {
-        await this.rootRef.child(`votes/${questionId}`).remove();
-      } else {
-        this._loadFromLocalStorage();
-        if (this.data.votes && this.data.votes[questionId]) {
-          delete this.data.votes[questionId];
-        }
-        this._saveToLocalStorage();
+      if (this.data.votes && this.data.votes[questionId]) {
+        delete this.data.votes[questionId];
         this._notify();
+      }
+
+      if (this.mode === "firebase" && this.restBaseUrl) {
+        await fetch(`${this.restBaseUrl}/votes/${questionId}.json`, {
+          method: "DELETE"
+        });
+      } else {
+        this._saveToLocalStorage();
       }
     }
 
     async resetEntireSession() {
       const newSessionId = "sess_" + Date.now().toString(36);
       const freshState = {
-        status: STATES.WAITING,
+        status: STATES.OPEN,
         currentIndex: 0,
         showQRModal: false,
         sessionId: newSessionId,
@@ -487,16 +533,18 @@
         localStorage.removeItem(STORAGE_KEY_VOTED_CACHE);
       } catch (e) {}
 
-      if (this.mode === "firebase" && this.rootRef) {
-        await this.rootRef.update({
-          state: freshState,
-          votes: null
+      this.data.state = freshState;
+      this.data.votes = {};
+      this._notify();
+
+      if (this.mode === "firebase" && this.restBaseUrl) {
+        await fetch(`${this.restBaseUrl}.json`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ state: freshState })
         });
       } else {
-        this.data.state = freshState;
-        this.data.votes = {};
         this._saveToLocalStorage();
-        this._notify();
       }
     }
 
@@ -521,14 +569,18 @@
         };
       }
 
-      if (this.mode === "firebase" && this.rootRef) {
-        await this.rootRef.child(`votes/${q.id}`).update(batch);
+      if (!this.data.votes[q.id]) this.data.votes[q.id] = {};
+      Object.assign(this.data.votes[q.id], batch);
+      this._notify();
+
+      if (this.mode === "firebase" && this.restBaseUrl) {
+        await fetch(`${this.restBaseUrl}/votes/${q.id}.json`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(batch)
+        });
       } else {
-        this._loadFromLocalStorage();
-        if (!this.data.votes[q.id]) this.data.votes[q.id] = {};
-        Object.assign(this.data.votes[q.id], batch);
         this._saveToLocalStorage();
-        this._notify();
       }
     }
 
@@ -551,13 +603,17 @@
         }
       });
 
-      if (this.mode === "firebase" && this.rootRef) {
-        await this.rootRef.child("votes").set(allVotes);
+      this.data.votes = allVotes;
+      this._notify();
+
+      if (this.mode === "firebase" && this.restBaseUrl) {
+        await fetch(`${this.restBaseUrl}/votes.json`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(allVotes)
+        });
       } else {
-        this._loadFromLocalStorage();
-        this.data.votes = allVotes;
         this._saveToLocalStorage();
-        this._notify();
       }
     }
 
@@ -570,13 +626,17 @@
         }
       } catch (e) {}
 
-      if (this.mode === "firebase" && this.rootRef) {
-        await this.rootRef.child("customQuestions").set(newQuestionsArray);
+      this.data.customQuestions = newQuestionsArray;
+      this._notify();
+
+      if (this.mode === "firebase" && this.restBaseUrl) {
+        await fetch(`${this.restBaseUrl}/customQuestions.json`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newQuestionsArray)
+        });
       } else {
-        this._loadFromLocalStorage();
-        this.data.customQuestions = newQuestionsArray;
         this._saveToLocalStorage();
-        this._notify();
       }
     }
 
