@@ -625,6 +625,199 @@ button {
   margin-top: 4px;
 }
 
+/* ==========================================================================
+   VISTA ORDENADA DE LAS 9 FRASES EN ESTADO 4 (RESULTADOS %) Y ESTADO 5 (REVELAR)
+   ========================================================================== */
+
+.all-q-results-section {
+  display: flex;
+  flex-direction: column;
+  height: 82vh;
+  width: 100%;
+}
+
+.all-q-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 1.6vh;
+  padding-bottom: 1vh;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.all-q-main-title {
+  font-size: clamp(1.35rem, 2vw, 2.1rem);
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.all-q-subtitle {
+  font-size: clamp(0.85rem, 1.1vw, 1.1rem);
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.all-questions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.2vh 1.2vw;
+  overflow-y: auto;
+  flex: 1;
+  padding-right: 6px;
+  align-content: start;
+}
+
+@media (max-width: 1200px) {
+  .all-questions-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 780px) {
+  .all-questions-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.all-q-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 1.3vh 1.1vw;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  animation: fadeInScale 0.35s ease backwards;
+}
+
+.all-q-card.is-active-round {
+  border-color: rgba(245, 158, 11, 0.55);
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.25);
+}
+
+.all-q-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.all-q-num {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: var(--accent-primary);
+  letter-spacing: 0.05em;
+}
+
+.all-q-vcount {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+}
+
+.all-q-quote {
+  font-size: clamp(0.84rem, 0.98vw, 1.02rem);
+  font-weight: 600;
+  line-height: 1.28;
+  color: var(--text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.all-q-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.all-q-bar-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.25fr) 1fr 48px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid transparent;
+}
+
+.all-q-bar-label {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.all-q-bar-track {
+  height: 10px;
+  background: var(--bar-neutral-bg);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.all-q-bar-fill {
+  height: 100%;
+  background: var(--bar-neutral-fill);
+  border-radius: 999px;
+  transition: width 0.6s ease;
+}
+
+.all-q-bar-pct {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-align: right;
+  color: var(--text-primary);
+}
+
+/* En Estado 5 (Revelar), resaltar la opción correcta de cada frase */
+.all-q-bar-row.is-correct {
+  background: var(--reveal-gold-bg);
+  border-color: var(--reveal-gold-border);
+}
+
+.all-q-bar-row.is-correct .all-q-bar-fill {
+  background: var(--reveal-gold);
+}
+
+.all-q-bar-row.is-correct .all-q-bar-label,
+.all-q-bar-row.is-correct .all-q-bar-pct {
+  color: var(--reveal-gold);
+}
+
+.all-q-bar-row.is-dimmed {
+  opacity: 0.42;
+}
+
+.all-q-reveal-footer {
+  margin-top: 2px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.all-q-verdict-badge {
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: var(--reveal-gold);
+}
+
+.all-q-source {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .result-bar-track {
   width: 100%;
   height: clamp(34px, 4.8vh, 52px);

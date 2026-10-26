@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>¿Autor o IA? — Pantalla Proyectada</title>
-  <link rel="stylesheet" href="styles.css?v=5" />
+  <link rel="stylesheet" href="styles.css?v=6" />
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
@@ -139,6 +139,23 @@
     </section>
 
     <!-- ==================================================================
+         ESTADOS 4 y 5: TODAS LAS FRASES EN ORDEN (#1 A #9) CON % Y REVELACIÓN
+         ================================================================== -->
+    <section id="stageAllQuestionsResults" class="all-q-results-section hidden">
+      <div class="all-q-header">
+        <div>
+          <h2 id="allQTitle" class="all-q-main-title">Resultados de la votación por frase (1 a 9)</h2>
+          <p id="allQSubtitle" class="all-q-subtitle">Porcentaje obtenido por cada opción en cada una de las preguntas</p>
+        </div>
+        <div class="live-vote-counter">
+          Votos totales: <strong id="allQTotalVotes">0</strong>
+        </div>
+      </div>
+
+      <div id="allQuestionsGrid" class="all-questions-grid"></div>
+    </section>
+
+    <!-- ==================================================================
          ESTADO FINAL: RESUMEN GENERAL DE LAS 9 FRASES
          ================================================================== -->
     <section id="stageFinal" class="final-summary-layout hidden">
@@ -197,9 +214,9 @@
   </div>
 
   <!-- Scripts -->
-  <script src="firebase-config.js?v=5"></script>
-  <script src="questions.js?v=5"></script>
-  <script src="app.js?v=5"></script>
+  <script src="firebase-config.js?v=6"></script>
+  <script src="questions.js?v=6"></script>
+  <script src="app.js?v=6"></script>
   <script>
     (function () {
       const { STATES, CATEGORY_META, engine, renderQRCode } = window.AIT;
@@ -247,6 +264,12 @@
       const revealAuthorText = document.getElementById("revealAuthorText");
       const revealExplanationText = document.getElementById("revealExplanationText");
       const revealSourceText = document.getElementById("revealSourceText");
+
+      const stageAllQuestionsResults = document.getElementById("stageAllQuestionsResults");
+      const allQTitle = document.getElementById("allQTitle");
+      const allQSubtitle = document.getElementById("allQSubtitle");
+      const allQTotalVotes = document.getElementById("allQTotalVotes");
+      const allQuestionsGrid = document.getElementById("allQuestionsGrid");
 
       const stageFinal = document.getElementById("stageFinal");
       const finalGlobalPct = document.getElementById("finalGlobalPct");
@@ -329,6 +352,7 @@
           projectorRoundBadge.classList.add("hidden");
           stageIntro.classList.remove("hidden");
           stageQuestion.classList.add("hidden");
+          stageAllQuestionsResults.classList.add("hidden");
           stageFinal.classList.add("hidden");
           lastStatus = status;
           return;
@@ -341,6 +365,7 @@
 
           stageIntro.classList.add("hidden");
           stageQuestion.classList.add("hidden");
+          stageAllQuestionsResults.classList.add("hidden");
           stageFinal.classList.remove("hidden");
 
           renderFinalList(globalSummary);
@@ -349,11 +374,32 @@
           return;
         }
 
-        // ESTADOS 2, 3, 4 y 5 (Ronda activa)
+        // ESTADO 4 (4. Resultados %) y ESTADO 5 (5. Revelar):
+        // Mostrar EN ORDEN cada una de las 9 preguntas con sus porcentajes y, en Estado 5, la respuesta correcta + fuente verificada
+        if (status === STATES.RESULTS || status === STATES.REVEALED) {
+          const isRevealed = status === STATES.REVEALED;
+          projectorRoundBadge.textContent = isRevealed
+            ? "5. REVELACIÓN (FRASES 1 A 9)"
+            : "4. RESULTADOS % (FRASES 1 A 9)";
+          projectorRoundBadge.classList.remove("hidden");
+
+          stageIntro.classList.add("hidden");
+          stageQuestion.classList.add("hidden");
+          stageFinal.classList.add("hidden");
+          stageAllQuestionsResults.classList.remove("hidden");
+
+          renderAllQuestionsOrdered(globalSummary, isRevealed, state.currentIndex);
+
+          lastStatus = status;
+          return;
+        }
+
+        // ESTADOS 2 y 3 (Ronda activa: Votación abierta / Votación cerrada)
         if (!currentQuestion || !currentQuestionStats) return;
 
         stageIntro.classList.add("hidden");
         stageFinal.classList.add("hidden");
+        stageAllQuestionsResults.classList.add("hidden");
         stageQuestion.classList.remove("hidden");
 
         projectorRoundBadge.textContent = `RONDA ${roundNumber} / ${totalQuestions}`;
@@ -468,6 +514,90 @@
           barPcts[key].textContent = "0 %";
           barVotes[key].textContent = "0 votos";
           barRows[key].classList.remove("is-correct-choice", "is-dimmed", "seq-hidden");
+        });
+      }
+
+      function renderAllQuestionsOrdered(globalSummary, isRevealed, activeIndex) {
+        if (!globalSummary) return;
+
+        allQTotalVotes.textContent = globalSummary.totalVotesAll;
+
+        if (isRevealed) {
+          allQTitle.textContent = "5. Respuestas correctas y fuentes verificadas (en orden #1 a #9)";
+          allQSubtitle.textContent =
+            "En dorado se destaca la respuesta correcta de cada frase junto a su fuente filológica o generación por IA.";
+        } else {
+          allQTitle.textContent = "4. Resultados de votación por pregunta (en orden #1 a #9)";
+          allQSubtitle.textContent =
+            "Porcentaje votado por el público para AUTOR y para IA en cada una de las frases.";
+        }
+
+        allQuestionsGrid.innerHTML = "";
+
+        globalSummary.perQuestion.forEach((item, idx) => {
+          const q = item.question;
+          const st = item.stats;
+          const isIa = q.correct === "ia";
+          const authorOptionText = engine.getAuthorOptionLabel(q);
+          const isCurrentRound = idx === activeIndex;
+
+          const card = document.createElement("div");
+          card.className = "all-q-card" + (isCurrentRound ? " is-active-round" : "");
+          card.style.animationDelay = `${idx * 70}ms`;
+
+          const autorRowClass = isRevealed
+            ? !isIa
+              ? "all-q-bar-row is-correct"
+              : "all-q-bar-row is-dimmed"
+            : "all-q-bar-row";
+
+          const iaRowClass = isRevealed
+            ? isIa
+              ? "all-q-bar-row is-correct"
+              : "all-q-bar-row is-dimmed"
+            : "all-q-bar-row";
+
+          const verdictText = isIa
+            ? `🤖 ERA IA (No de ${q.claimedAuthor})`
+            : `📚 ERA AUTOR (${q.author || q.claimedAuthor})`;
+
+          card.innerHTML = `
+            <div class="all-q-card-top">
+              <span class="all-q-num">FRASE #${item.index}</span>
+              <span class="all-q-vcount">${st.total} ${st.total === 1 ? "voto" : "votos"}</span>
+            </div>
+
+            <blockquote class="all-q-quote">“${q.quote}”</blockquote>
+
+            <div class="all-q-bars">
+              <div class="${autorRowClass}">
+                <div class="all-q-bar-label">📚 ${authorOptionText}</div>
+                <div class="all-q-bar-track">
+                  <div class="all-q-bar-fill" style="width: ${st.pct.autor}%"></div>
+                </div>
+                <div class="all-q-bar-pct">${st.pct.autor} %</div>
+              </div>
+
+              <div class="${iaRowClass}">
+                <div class="all-q-bar-label">🤖 IA</div>
+                <div class="all-q-bar-track">
+                  <div class="all-q-bar-fill" style="width: ${st.pct.ia}%"></div>
+                </div>
+                <div class="all-q-bar-pct">${st.pct.ia} %</div>
+              </div>
+            </div>
+
+            ${
+              isRevealed
+                ? `<div class="all-q-reveal-footer">
+                    <span class="all-q-verdict-badge">${verdictText}</span>
+                    <span class="all-q-source">📖 ${q.source || q.explanation}</span>
+                  </div>`
+                : ""
+            }
+          `;
+
+          allQuestionsGrid.appendChild(card);
         });
       }
 
