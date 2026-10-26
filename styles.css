@@ -521,14 +521,19 @@ button {
 
 .result-bar-row {
   display: grid;
-  grid-template-columns: minmax(260px, 380px) 1fr 120px;
+  grid-template-columns: minmax(260px, 420px) 1fr 140px;
   align-items: center;
   gap: 24px;
-  padding: 16px 22px;
+  padding: 18px 24px;
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.02);
-  border: 2px solid transparent;
-  transition: all 0.4s ease;
+  background: rgba(255, 255, 255, 0.03);
+  border: 2px solid var(--border-subtle);
+  transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.4s ease, background-color 0.4s ease;
+}
+
+.result-bar-row.seq-hidden {
+  opacity: 0;
+  transform: translateY(16px);
 }
 
 .result-bar-label {
@@ -540,6 +545,15 @@ button {
   align-items: center;
   gap: 12px;
   line-height: 1.2;
+}
+
+.result-bar-votes-sub {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-top: 2px;
 }
 
 /* Barra de controles discretos en el proyector */

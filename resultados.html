@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>¿Autor o IA? — Pantalla Proyectada</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=4" />
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
@@ -96,11 +96,15 @@
         </div>
       </div>
 
-      <!-- Estado 4 (Resultados neutros) y Estado 5 (Revelación destacada) -->
+      <!-- Estado 4 (Resultados neutros en orden secuencial) y Estado 5 (Revelación destacada) -->
       <div id="barsSection" class="bars-container hidden">
         <div id="barRowAutor" class="result-bar-row">
           <div class="result-bar-label">
-            <span id="barLabelAutor">AUTOR</span>
+            <span>📚</span>
+            <div>
+              <span id="barLabelAutor">AUTOR</span>
+              <span id="barVotesAutor" class="result-bar-votes-sub">0 votos</span>
+            </div>
           </div>
           <div class="result-bar-track">
             <div id="barFillAutor" class="result-bar-fill"></div>
@@ -110,7 +114,11 @@
 
         <div id="barRowIa" class="result-bar-row">
           <div class="result-bar-label">
-            <span>IA</span>
+            <span>🤖</span>
+            <div>
+              <span>IA</span>
+              <span id="barVotesIa" class="result-bar-votes-sub">0 votos</span>
+            </div>
           </div>
           <div class="result-bar-track">
             <div id="barFillIa" class="result-bar-fill"></div>
@@ -185,9 +193,9 @@
   </div>
 
   <!-- Scripts -->
-  <script src="firebase-config.js?v=3"></script>
-  <script src="questions.js?v=3"></script>
-  <script src="app.js?v=3"></script>
+  <script src="firebase-config.js?v=4"></script>
+  <script src="questions.js?v=4"></script>
+  <script src="app.js?v=4"></script>
   <script>
     (function () {
       const { STATES, CATEGORY_META, engine, renderQRCode } = window.AIT;
@@ -212,6 +220,10 @@
 
       const barsSection = document.getElementById("barsSection");
       const barLabelAutor = document.getElementById("barLabelAutor");
+      const barVotes = {
+        autor: document.getElementById("barVotesAutor"),
+        ia: document.getElementById("barVotesIa")
+      };
       const barRows = {
         autor: document.getElementById("barRowAutor"),
         ia: document.getElementById("barRowIa")
@@ -224,6 +236,7 @@
         autor: document.getElementById("barPctAutor"),
         ia: document.getElementById("barPctIa")
       };
+      let seqTimer = null;
 
       const revealCallout = document.getElementById("revealCallout");
       const revealVerdictBadge = document.getElementById("revealVerdictBadge");
@@ -392,7 +405,7 @@
           resetBarStyles();
         }
 
-        // Estado 4: Resultados (barras horizontales grandes animadas, sin revelar cuál es correcta)
+        // Estado 4: Resultados (muestra en orden cada opción con su porcentaje y cantidad de votos)
         else if (status === STATES.RESULTS) {
           projectedQuote.classList.add("compact");
           projectedOptionsHint.classList.add("hidden");
@@ -404,18 +417,34 @@
             barRows[key].classList.remove("is-correct-choice", "is-dimmed");
           });
 
-          animateBarsTo(currentQuestionStats.pct, lastStatus !== STATES.RESULTS);
+          animateBarsSequentially(
+            currentQuestionStats.pct,
+            currentQuestionStats.counts,
+            lastStatus !== STATES.RESULTS
+          );
         }
 
         // Estado 5: Revelación (destaca opción correcta + autor + fuente verificada)
         else if (status === STATES.REVEALED) {
+          if (seqTimer) {
+            clearTimeout(seqTimer);
+            seqTimer = null;
+          }
           projectedQuote.classList.add("compact");
           projectedOptionsHint.classList.add("hidden");
           statusRow.classList.add("hidden");
           barsSection.classList.remove("hidden");
           revealCallout.classList.remove("hidden");
 
-          animateBarsTo(currentQuestionStats.pct, false);
+          ["autor", "ia"].forEach((key) => {
+            barRows[key].classList.remove("seq-hidden");
+          });
+
+          animateBarsSequentially(
+            currentQuestionStats.pct,
+            currentQuestionStats.counts,
+            false
+          );
 
           const correctKey = currentQuestion.correct === "ia" ? "ia" : "autor";
           ["autor", "ia"].forEach((key) => {
@@ -446,30 +475,57 @@
       });
 
       function resetBarStyles() {
+        if (seqTimer) {
+          clearTimeout(seqTimer);
+          seqTimer = null;
+        }
         ["autor", "ia"].forEach((key) => {
           barFills[key].style.width = "0%";
           barPcts[key].textContent = "0 %";
-          barRows[key].classList.remove("is-correct-choice", "is-dimmed");
+          barVotes[key].textContent = "0 votos";
+          barRows[key].classList.remove("is-correct-choice", "is-dimmed", "seq-hidden");
         });
       }
 
-      function animateBarsTo(pctObj, fromZero) {
-        if (fromZero) {
-          ["autor", "ia"].forEach((key) => {
-            barFills[key].style.width = "0%";
-          });
+      function animateBarsSequentially(pctObj, countsObj, animateStepByStep) {
+        const formatVotes = (n) => (n === 1 ? "1 voto" : `${n} votos`);
+
+        if (animateStepByStep) {
+          if (seqTimer) clearTimeout(seqTimer);
+
+          // Preparar ambas en 0 y ocultar la segunda fila para que aparezcan en orden (1º AUTOR, 2º IA)
+          barFills.autor.style.width = "0%";
+          barPcts.autor.textContent = "0 %";
+          barVotes.autor.textContent = formatVotes(countsObj.autor || 0);
+          barRows.autor.classList.remove("seq-hidden");
+
+          barFills.ia.style.width = "0%";
+          barPcts.ia.textContent = "0 %";
+          barVotes.ia.textContent = formatVotes(countsObj.ia || 0);
+          barRows.ia.classList.add("seq-hidden");
+
+          // Paso 1: Animar primero la respuesta 1: AUTOR (Nombre) y su %
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-              ["autor", "ia"].forEach((key) => {
-                barFills[key].style.width = `${pctObj[key]}%`;
-                barPcts[key].textContent = `${pctObj[key]} %`;
-              });
+              barFills.autor.style.width = `${pctObj.autor}%`;
+              barPcts.autor.textContent = `${pctObj.autor} %`;
             });
           });
+
+          // Paso 2 (tras 750ms): Mostrar y animar la respuesta 2: IA y su %
+          seqTimer = setTimeout(() => {
+            barRows.ia.classList.remove("seq-hidden");
+            requestAnimationFrame(() => {
+              barFills.ia.style.width = `${pctObj.ia}%`;
+              barPcts.ia.textContent = `${pctObj.ia} %`;
+            });
+          }, 750);
         } else {
           ["autor", "ia"].forEach((key) => {
+            barRows[key].classList.remove("seq-hidden");
             barFills[key].style.width = `${pctObj[key]}%`;
             barPcts[key].textContent = `${pctObj[key]} %`;
+            barVotes[key].textContent = formatVotes((countsObj && countsObj[key]) || 0);
           });
         }
       }
