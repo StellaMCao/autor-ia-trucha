@@ -811,41 +811,79 @@ button {
 
 .final-q-item {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 14px;
-  padding: 1.1vh 1.2vw;
+  gap: 16px;
+  padding: 1vh 1.2vw;
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
 }
 
+.final-q-main {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
 .final-q-quote {
-  font-size: clamp(0.88rem, 1.08vw, 1.12rem);
-  font-weight: 500;
+  font-size: clamp(0.88rem, 1.05vw, 1.1rem);
+  font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.final-q-tag {
+.final-q-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
   font-family: var(--font-mono);
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 6px;
+  font-size: 0.78rem;
+}
+
+.final-q-opt {
+  padding: 2px 8px;
+  border-radius: 5px;
   background: var(--bg-elevated);
   color: var(--text-secondary);
+  border: 1px solid transparent;
+}
+
+.final-q-opt.correct-opt {
+  background: var(--reveal-gold-bg);
+  color: var(--reveal-gold);
+  border-color: rgba(251, 191, 36, 0.45);
+}
+
+.final-q-verdict-mini {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.final-q-pct-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 78px;
 }
 
 .final-q-pct {
   font-family: var(--font-mono);
-  font-size: clamp(0.95rem, 1.2vw, 1.25rem);
+  font-size: clamp(1rem, 1.25vw, 1.3rem);
   font-weight: 800;
-  min-width: 64px;
-  text-align: right;
   color: var(--reveal-gold);
+  line-height: 1.1;
+}
+
+.final-q-pct-sub {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
 }
 
 /* Modal de QR superpuesto cuando la presentadora toca "Mostrar QR" */

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>¿Autor o IA? — Pantalla Proyectada</title>
-  <link rel="stylesheet" href="styles.css?v=4" />
+  <link rel="stylesheet" href="styles.css?v=5" />
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
@@ -160,7 +160,11 @@
 
       <div class="final-right-panel">
         <div class="final-list-header">
-          <span class="final-list-title">De la más fácil a la más engañosa (% de aciertos)</span>
+          <span id="finalListTitle" class="final-list-title">Resultados por frase (en orden 1 a 9)</span>
+          <div style="display: flex; gap: 6px;">
+            <button type="button" id="btnSortOrder" class="proj-ctrl-btn active">En orden (1-9)</button>
+            <button type="button" id="btnSortDiff" class="proj-ctrl-btn">Por % aciertos</button>
+          </div>
         </div>
         <div id="finalQuestionsList" class="final-questions-list"></div>
       </div>
@@ -193,9 +197,9 @@
   </div>
 
   <!-- Scripts -->
-  <script src="firebase-config.js?v=4"></script>
-  <script src="questions.js?v=4"></script>
-  <script src="app.js?v=4"></script>
+  <script src="firebase-config.js?v=5"></script>
+  <script src="questions.js?v=5"></script>
+  <script src="app.js?v=5"></script>
   <script>
     (function () {
       const { STATES, CATEGORY_META, engine, renderQRCode } = window.AIT;
@@ -251,6 +255,10 @@
       const finalRankTitle = document.getElementById("finalRankTitle");
       const finalRankSubtitle = document.getElementById("finalRankSubtitle");
       const finalQuestionsList = document.getElementById("finalQuestionsList");
+      const finalListTitle = document.getElementById("finalListTitle");
+      const btnSortOrder = document.getElementById("btnSortOrder");
+      const btnSortDiff = document.getElementById("btnSortDiff");
+      let finalSortMode = "order"; // "order" (1 a 9) | "difficulty" (de más fácil a más engañosa)
 
       const qrOverlayModal = document.getElementById("qrOverlayModal");
       const modalQrContainer = document.getElementById("modalQrContainer");
@@ -335,31 +343,7 @@
           stageQuestion.classList.add("hidden");
           stageFinal.classList.remove("hidden");
 
-          finalGlobalPct.textContent = `${globalSummary.globalAccuracyPct} %`;
-          finalTotalVotes.textContent = globalSummary.totalVotesAll;
-          finalRankRange.textContent = `Rango ${globalSummary.rank.range} de aciertos`;
-          finalRankTitle.textContent = globalSummary.rank.title;
-          finalRankSubtitle.textContent = globalSummary.rank.subtitle;
-
-          finalQuestionsList.innerHTML = "";
-          globalSummary.sortedByDifficulty.forEach((item) => {
-            const row = document.createElement("div");
-            row.className = "final-q-item";
-
-            const isIa = item.question.correct === "ia";
-            const badgeLabel = isIa
-              ? "🤖 IA"
-              : `📚 ${item.question.author || item.question.claimedAuthor}`;
-
-            row.innerHTML = `
-              <div class="final-q-quote" title="${item.question.quote.replace(/"/g, '&quot;')}">
-                <strong>#${item.index}</strong> “${item.question.quote}”
-              </div>
-              <span class="final-q-tag">${badgeLabel}</span>
-              <span class="final-q-pct">${item.stats.accuracyPct} %</span>
-            `;
-            finalQuestionsList.appendChild(row);
-          });
+          renderFinalList(globalSummary);
 
           lastStatus = status;
           return;
@@ -486,6 +470,70 @@
           barRows[key].classList.remove("is-correct-choice", "is-dimmed", "seq-hidden");
         });
       }
+
+      function renderFinalList(globalSummary) {
+        if (!globalSummary) return;
+
+        finalGlobalPct.textContent = `${globalSummary.globalAccuracyPct} %`;
+        finalTotalVotes.textContent = globalSummary.totalVotesAll;
+        finalRankRange.textContent = `Rango ${globalSummary.rank.range} de aciertos`;
+        finalRankTitle.textContent = globalSummary.rank.title;
+        finalRankSubtitle.textContent = globalSummary.rank.subtitle;
+
+        const listToRender =
+          finalSortMode === "order"
+            ? globalSummary.perQuestion
+            : globalSummary.sortedByDifficulty;
+
+        finalListTitle.textContent =
+          finalSortMode === "order"
+            ? "Resultados por pregunta (en orden 1 a 9)"
+            : "De la más fácil a la más engañosa (% de aciertos)";
+
+        finalQuestionsList.innerHTML = "";
+        listToRender.forEach((item) => {
+          const row = document.createElement("div");
+          row.className = "final-q-item";
+
+          const isIa = item.question.correct === "ia";
+          const authorName = item.question.claimedAuthor || item.question.author || "Autor";
+          const correctBadge = isIa
+            ? `🤖 Era IA`
+            : `📚 Era ${authorName}`;
+
+          row.innerHTML = `
+            <div class="final-q-main">
+              <div class="final-q-quote" title="${item.question.quote.replace(/"/g, '&quot;')}">
+                <strong>#${item.index}</strong> “${item.question.quote}”
+              </div>
+              <div class="final-q-breakdown">
+                <span class="final-q-opt ${!isIa ? 'correct-opt' : ''}">📚 ${authorName}: <strong>${item.stats.pct.autor} %</strong></span>
+                <span class="final-q-opt ${isIa ? 'correct-opt' : ''}">🤖 IA: <strong>${item.stats.pct.ia} %</strong></span>
+                <span class="final-q-verdict-mini">${correctBadge}</span>
+              </div>
+            </div>
+            <div class="final-q-pct-box">
+              <span class="final-q-pct">${item.stats.accuracyPct} %</span>
+              <span class="final-q-pct-sub">aciertos</span>
+            </div>
+          `;
+          finalQuestionsList.appendChild(row);
+        });
+      }
+
+      btnSortOrder.addEventListener("click", () => {
+        finalSortMode = "order";
+        btnSortOrder.classList.add("active");
+        btnSortDiff.classList.remove("active");
+        if (latestSnap) renderFinalList(latestSnap.globalSummary);
+      });
+
+      btnSortDiff.addEventListener("click", () => {
+        finalSortMode = "difficulty";
+        btnSortDiff.classList.add("active");
+        btnSortOrder.classList.remove("active");
+        if (latestSnap) renderFinalList(latestSnap.globalSummary);
+      });
 
       function animateBarsSequentially(pctObj, countsObj, animateStepByStep) {
         const formatVotes = (n) => (n === 1 ? "1 voto" : `${n} votos`);
