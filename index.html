@@ -4,198 +4,145 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
-  <title>¿Autor o IA? — Votación en vivo</title>
-  <link rel="stylesheet" href="styles.css?v=3" />
-  <!-- Firebase SDK -->
+  <title>¿Autor o IA? — Participación</title>
+  <link rel="stylesheet" href="styles.css?v=8" />
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 </head>
 <body class="participant-body">
 
-  <!-- Indicador de conexión discreto -->
-  <div id="connBanner" class="connection-banner hidden" role="status" aria-live="polite">
-    <span class="connection-dot"></span>
-    <span id="connText">Conectado</span>
-  </div>
-
   <header class="participant-header">
-    <div class="participant-brand">¿Autor o IA?</div>
-    <div id="roundBadge" class="participant-round-pill">Frase 1 / 9</div>
+    <div class="participant-brand">¿Autor/a o IA?</div>
+    <div id="roundBadge" class="participant-round-pill">Frase 1 / 6</div>
   </header>
 
-  <main class="participant-main">
-    <!-- Vista 1: Esperando la próxima frase (oculta por defecto para que abra directo en votación) -->
-    <section id="viewWaiting" class="waiting-card hidden">
-      <div class="pulse-ring"></div>
-      <h1 id="waitingTitle" class="waiting-title">Esperando la próxima frase…</h1>
-      <p id="waitingSubtitle" class="waiting-sub">
-        Mirá la pantalla principal. Cuando se habilite la votación, las opciones aparecerán automáticamente acá.
-      </p>
-    </section>
+  <!-- Barra de progreso de las 6 frases -->
+  <div class="mobile-progress-track">
+    <div id="mobileProgressBar" class="mobile-progress-fill" style="width: 16.6%;"></div>
+  </div>
 
-    <!-- Vista 2: Pregunta activa para votar (visible de inmediato al cargar) -->
+  <main class="participant-main">
+    <!-- Vista de pregunta en sucesión (1 a 6) -->
     <section id="viewVoting">
       <div class="mobile-quote-box">
-        <span id="mobileQuestionLabel" class="mobile-question-number">Frase #1</span>
+        <span id="mobileQuestionLabel" class="mobile-question-number">FRASE 1 DE 6</span>
         <blockquote id="mobileQuoteText" class="mobile-quote-text">
-          “Las convicciones son enemigos de la verdad más peligrosos que las mentiras.”
+          «El olvido no destruye los recuerdos; apenas cambia el orden de la biblioteca que somos».
         </blockquote>
       </div>
 
       <div id="voteButtonsContainer" class="vote-buttons-stack">
         <button type="button" class="vote-btn" data-choice="autor">
-          <span id="btnAutorLabel" style="text-align: left; line-height: 1.25;">AUTOR (Friedrich Nietzsche)</span>
-          <span class="vote-btn-icon" aria-hidden="true">📚</span>
+          <span>📚 AUTOR / AUTORA</span>
+          <span class="vote-btn-arrow">→</span>
         </button>
 
         <button type="button" class="vote-btn" data-choice="ia">
-          <span>IA</span>
-          <span class="vote-btn-icon" aria-hidden="true">🤖</span>
+          <span>🤖 IA</span>
+          <span class="vote-btn-arrow">→</span>
         </button>
       </div>
+    </section>
 
-      <!-- Aparece inmediatamente después de votar (sin revelar porcentajes ni si acertó) -->
-      <div id="voteRegisteredBox" class="vote-registered-card hidden">
-        <div class="check-circle" aria-hidden="true">✓</div>
-        <h2 class="vote-registered-title">Voto registrado</h2>
-        <p class="vote-registered-sub">
-          Mantené la mirada en la pantalla proyectada para descubrir el veredicto colectivo.
-        </p>
-      </div>
+    <!-- Vista al terminar las 6 frases -->
+    <section id="viewDone" class="vote-registered-card hidden">
+      <div class="check-circle" aria-hidden="true">✓</div>
+      <h2 class="vote-registered-title">¡Listo!</h2>
+      <p class="vote-registered-sub">
+        Ya respondiste las 6 frases.<br />
+        Mirá la pantalla proyectada para ver los porcentajes y descubrir cuáles eran de autor/a y cuáles de IA.
+      </p>
     </section>
   </main>
 
   <footer class="participant-footer">
-    Participación anónima en tiempo real · Fuentes verificadas
+    Participación anónima en tiempo real
   </footer>
 
-  <!-- Configuración, banco de frases y lógica con cache-busting -->
-  <script src="firebase-config.js?v=3"></script>
-  <script src="questions.js?v=3"></script>
-  <script src="app.js?v=3"></script>
+  <script src="firebase-config.js?v=8"></script>
+  <script src="questions.js?v=8"></script>
+  <script src="app.js?v=8"></script>
   <script>
     (function () {
-      const { STATES, engine } = window.AIT;
+      const { engine } = window.AIT;
 
-      const connBanner = document.getElementById("connBanner");
-      const connText = document.getElementById("connText");
       const roundBadge = document.getElementById("roundBadge");
-
-      const viewWaiting = document.getElementById("viewWaiting");
-      const waitingTitle = document.getElementById("waitingTitle");
-      const waitingSubtitle = document.getElementById("waitingSubtitle");
-
+      const mobileProgressBar = document.getElementById("mobileProgressBar");
       const viewVoting = document.getElementById("viewVoting");
+      const viewDone = document.getElementById("viewDone");
       const mobileQuestionLabel = document.getElementById("mobileQuestionLabel");
       const mobileQuoteText = document.getElementById("mobileQuoteText");
-      const btnAutorLabel = document.getElementById("btnAutorLabel");
-      const voteButtonsContainer = document.getElementById("voteButtonsContainer");
-      const voteRegisteredBox = document.getElementById("voteRegisteredBox");
       const voteButtons = document.querySelectorAll(".vote-btn");
 
-      let currentQuestionId = 1;
+      let questions = window.DEFAULT_QUESTIONS || [];
+      let currentLocalIndex = 0;
       let isSubmitting = false;
 
       engine.init();
 
-      engine.onConnectionChange(({ isConnected, mode }) => {
-        if (!isConnected) {
-          connBanner.classList.remove("hidden", "demo-mode");
-          connBanner.classList.add("offline");
-          connText.textContent = "Reconectando…";
-        } else if (mode === "local") {
-          connBanner.classList.remove("hidden", "offline");
-          connBanner.classList.add("demo-mode");
-          connText.textContent = "Modo Demo Local";
-        } else {
-          connBanner.classList.add("hidden");
-        }
-      });
+      function syncProgressFromStorage() {
+        questions = engine.getQuestions();
+        const votedMap = engine.getDeviceVotesMap();
 
-      engine.subscribe((snap) => {
-        const { state, questions, currentQuestion } = snap;
-        const totalQuestions = questions.length;
-        const roundNum = state.currentIndex + 1;
+        // Buscar la primera frase de las 6 que este celular todavía no haya votado
+        const nextUnvotedIndex = questions.findIndex((q) => !votedMap[q.id]);
 
-        if (!currentQuestion) return;
-        currentQuestionId = currentQuestion.id;
-
-        const existingVote = engine.getDeviceVote(currentQuestion.id);
-
-        if (state.status === STATES.WAITING) {
-          roundBadge.classList.add("hidden");
+        if (nextUnvotedIndex === -1) {
+          // Ya votó las 6 frases
+          roundBadge.textContent = "6 / 6";
+          mobileProgressBar.style.width = "100%";
           viewVoting.classList.add("hidden");
-          viewWaiting.classList.remove("hidden");
-          waitingTitle.textContent = "Esperando la próxima frase…";
-          waitingSubtitle.textContent =
-            "Mirá la pantalla principal. Cuando se abra la votación podrás elegir tu respuesta desde acá.";
+          viewDone.classList.remove("hidden");
           return;
         }
 
-        if (state.status === STATES.FINAL) {
-          roundBadge.classList.add("hidden");
-          viewVoting.classList.add("hidden");
-          viewWaiting.classList.remove("hidden");
-          waitingTitle.textContent = "Esperando la próxima frase…";
-          waitingSubtitle.textContent =
-            "Mirá en la pantalla proyectada el resumen final de nuestra puntería epistemológica.";
-          return;
+        currentLocalIndex = nextUnvotedIndex;
+        const currentQ = questions[currentLocalIndex];
+        const stepNum = currentLocalIndex + 1;
+        const total = questions.length;
+
+        roundBadge.textContent = `Frase ${stepNum} / ${total}`;
+        mobileProgressBar.style.width = `${Math.round((stepNum / total) * 100)}%`;
+
+        mobileQuestionLabel.textContent = `FRASE ${stepNum} DE ${total}`;
+        mobileQuoteText.textContent = `«${currentQ.quote}»`;
+
+        viewDone.classList.add("hidden");
+        viewVoting.classList.remove("hidden");
+        voteButtons.forEach((b) => (b.disabled = false));
+      }
+
+      // Render inicial inmediato sin esperar a la red
+      syncProgressFromStorage();
+
+      // Suscribirse por si se reinicia la sesión desde la pantalla principal
+      engine.subscribe(() => {
+        if (!isSubmitting) {
+          syncProgressFromStorage();
         }
-
-        roundBadge.textContent = `Frase ${roundNum} / ${totalQuestions}`;
-        roundBadge.classList.remove("hidden");
-
-        mobileQuestionLabel.textContent = `Frase #${roundNum}`;
-        mobileQuoteText.textContent = `“${currentQuestion.quote}”`;
-        btnAutorLabel.textContent = engine.getAuthorOptionLabel(currentQuestion);
-
-        // Si ya votó en esta pregunta, mostramos siempre "Voto registrado"
-        if (existingVote) {
-          viewWaiting.classList.add("hidden");
-          viewVoting.classList.remove("hidden");
-          voteButtonsContainer.classList.add("hidden");
-          voteRegisteredBox.classList.remove("hidden");
-          return;
-        }
-
-        // Si todavía no votó y la votación está abierta: mostrar los 2 botones grandes
-        if (state.status === STATES.OPEN) {
-          viewWaiting.classList.add("hidden");
-          viewVoting.classList.remove("hidden");
-          voteRegisteredBox.classList.add("hidden");
-          voteButtonsContainer.classList.remove("hidden");
-          voteButtons.forEach((btn) => (btn.disabled = false));
-          return;
-        }
-
-        // Si la votación ya se cerró y la persona no llegó a votar:
-        viewVoting.classList.add("hidden");
-        viewWaiting.classList.remove("hidden");
-        waitingTitle.textContent = "Esperando la próxima frase…";
-        waitingSubtitle.textContent =
-          "La votación de esta frase ya se cerró. Preparate para la siguiente ronda.";
       });
 
       voteButtons.forEach((btn) => {
         btn.addEventListener("click", async () => {
-          if (isSubmitting || !currentQuestionId) return;
+          if (isSubmitting) return;
+          const currentQ = questions[currentLocalIndex];
+          if (!currentQ) return;
+
           const choice = btn.getAttribute("data-choice");
           isSubmitting = true;
           voteButtons.forEach((b) => (b.disabled = true));
 
           try {
-            await engine.submitVote(currentQuestionId, choice);
-            voteButtonsContainer.classList.add("hidden");
-            voteRegisteredBox.classList.remove("hidden");
-          } catch (err) {
-            console.error("Error al registrar el voto:", err);
-            alert("No se pudo enviar el voto. Verificá tu conexión e intentá nuevamente.");
-            voteButtons.forEach((b) => (b.disabled = false));
-          } finally {
-            isSubmitting = false;
+            // Enviar voto a Firebase y avanzar inmediatamente a la siguiente frase
+            engine.submitVote(currentQ.id, choice);
+          } catch (e) {
+            console.error(e);
           }
+
+          setTimeout(() => {
+            isSubmitting = false;
+            syncProgressFromStorage();
+          }, 160);
         });
       });
     })();

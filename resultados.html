@@ -3,768 +3,239 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>¿Autor o IA? — Pantalla Proyectada</title>
-  <link rel="stylesheet" href="styles.css?v=7" />
-  <!-- Firebase SDK -->
+  <title>¿Autor o IA? — Pantalla y Resultados</title>
+  <link rel="stylesheet" href="styles.css?v=8" />
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-  <!-- Generador QR instantáneo en cliente -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body class="projector-body">
 
-  <!-- Indicador de estado de red discreto -->
-  <div id="connBanner" class="connection-banner hidden">
-    <span class="connection-dot"></span>
-    <span id="connText">Conectado</span>
-  </div>
-
-  <!-- Barra superior minimalista + Controles discretos para el proyector -->
-  <header class="projector-topbar">
-    <div id="topBrand" class="projector-brand">
-      ¿Autor o IA?
+  <!-- Barra superior limpia con controles sencillos (no se imprime al imprimir QR) -->
+  <header class="projector-topbar no-print">
+    <div class="projector-brand">
+      <strong>¿Autor/a o IA?</strong>
+      <span class="projector-sub-stats">
+        Participantes: <strong id="statParticipants">0</strong> · Votos totales: <strong id="statTotalVotes">0</strong>
+      </span>
     </div>
 
-    <!-- Barra rápida discreta en el proyector para cambiar de estado con un clic o con teclado -->
-    <div class="projector-quick-controls" title="También podés usar las flechas del teclado o las teclas 1 a 6">
-      <button type="button" class="proj-ctrl-btn" data-proj-status="waiting">1. QR</button>
-      <button type="button" class="proj-ctrl-btn" data-proj-status="open">2. Votación</button>
-      <button type="button" class="proj-ctrl-btn" data-proj-status="closed">3. Cerrar</button>
-      <button type="button" class="proj-ctrl-btn" data-proj-status="results">4. Resultados %</button>
-      <button type="button" class="proj-ctrl-btn" data-proj-status="revealed">5. Revelar</button>
-      <button type="button" class="proj-ctrl-btn" id="projBtnPrev" title="Frase anterior">◀</button>
-      <button type="button" class="proj-ctrl-btn" id="projBtnNext" title="Siguiente frase">▶</button>
-      <button type="button" class="proj-ctrl-btn" data-proj-status="final">Resumen Final</button>
-    </div>
-
-    <div class="projector-meta-right">
-      <div id="projectorRoundBadge" class="projector-round-indicator hidden">
-        RONDA 1 / 9
-      </div>
+    <div class="projector-controls-group">
+      <button type="button" class="ctrl-pill" id="btnViewQR">
+        📱 QR Grande / Imprimir
+      </button>
+      <button type="button" class="ctrl-pill active" id="btnViewResults">
+        📊 Resultados en vivo (%)
+      </button>
+      <button type="button" class="ctrl-pill" id="btnViewReveal">
+        ✨ Revelar Autores y Referencias
+      </button>
+      <button type="button" class="ctrl-pill ctrl-danger" id="btnResetAll" title="Borrar todos los votos para empezar de cero">
+        🔄 Reiniciar votos
+      </button>
     </div>
   </header>
 
-  <!-- ESCENARIO PRINCIPAL PROYECTADO -->
   <main class="projector-stage">
 
     <!-- ==================================================================
-         ESTADO 1: INGRESO
+         VISTA 1: QR FIJO GRANDE (Para mostrar al inicio o imprimir en hoja)
          ================================================================== -->
-    <section id="stageIntro" class="stage-intro hidden">
-      <div>
-        <h1 class="intro-title">¿Autor o IA?</h1>
-        <p class="intro-cta">Escaneá el QR y preparate para desconfiar de todo.</p>
+    <section id="sectionQR" class="qr-print-sheet hidden">
+      <div class="qr-print-text">
+        <h1 class="intro-title">¿Autor/a o IA?</h1>
+        <p class="intro-cta">Escaneá el código QR con tu celular para votar en las 6 frases.</p>
         <p class="intro-subtitle">
-          Nueve frases. Dos posibilidades: pluma humana con fuente verificada o generación artificial.
+          En cada frase elegí si pertenece a un/a <strong>Autor/a</strong> real o si fue generada por <strong>Inteligencia Artificial</strong>.
         </p>
+        <div class="no-print" style="margin-top: 24px; display: flex; gap: 12px;">
+          <button type="button" id="btnPrintQR" class="btn btn-primary">
+            🖨️ Imprimir esta hoja con el QR
+          </button>
+          <button type="button" id="btnGoToLiveResults" class="btn">
+            Ir a los resultados en pantalla →
+          </button>
+        </div>
       </div>
 
       <div class="qr-card-large">
-        <div id="introQrContainer" class="qr-box"></div>
-        <div id="introQrUrl" class="qr-url-caption"></div>
+        <div id="mainQrContainer" class="qr-box"></div>
+        <div id="mainQrUrl" class="qr-url-caption">https://stellamcao.github.io/autor-ia-trucha/</div>
       </div>
     </section>
 
     <!-- ==================================================================
-         ESTADOS 2, 3, 4 y 5: VOTACIÓN, SUSPENSO, RESULTADOS Y REVELACIÓN
+         VISTA 2: LAS 6 FRASES EN PANTALLA CON PORCENTAJES Y REVELACIÓN
          ================================================================== -->
-    <section id="stageQuestion" class="stage-quote-wrap hidden">
-      <blockquote id="projectedQuote" class="projector-quote">
-        “…”
-      </blockquote>
-
-      <!-- Opciones visibles durante la pregunta -->
-      <div id="projectedOptionsHint" class="projected-options-pills">
-        <span id="pillOptionAutor" class="proj-option-pill">📚 AUTOR</span>
-        <span class="proj-option-vs">vs.</span>
-        <span class="proj-option-pill">🤖 IA</span>
-      </div>
-
-      <!-- Estado 2 (Votación abierta) y Estado 3 (Votación cerrada) -->
-      <div id="statusRow" class="projector-status-row">
-        <div id="badgeOpen" class="status-badge-live">
-          <span class="live-dot"></span>
-          <span>Votación abierta</span>
+    <section id="sectionBoard" class="board-6-layout">
+      <!-- Columna lateral izquierda con QR fijo siempre visible en pantalla -->
+      <aside class="board-qr-sidebar no-print">
+        <div class="sidebar-qr-card">
+          <div class="sidebar-qr-title">Escaneá para votar</div>
+          <div id="sidebarQrContainer" class="sidebar-qr-box"></div>
+          <div class="sidebar-qr-url">stellamcao.github.io/autor-ia-trucha</div>
         </div>
 
-        <div id="badgeClosed" class="status-badge-closed hidden">
-          <span>Votación cerrada</span>
+        <div id="globalAccuracyCard" class="sidebar-accuracy-card hidden">
+          <div class="sidebar-acc-label">Aciertos globales</div>
+          <div id="globalAccValue" class="sidebar-acc-value">0 %</div>
         </div>
+      </aside>
 
-        <div class="live-vote-counter">
-          Votos recibidos: <strong id="liveVotesCount">0</strong>
-        </div>
-      </div>
-
-      <!-- Estado 4 (Resultados neutros en orden secuencial) y Estado 5 (Revelación destacada) -->
-      <div id="barsSection" class="bars-container hidden">
-        <div id="barRowAutor" class="result-bar-row">
-          <div class="result-bar-label">
-            <span>📚</span>
-            <div>
-              <span id="barLabelAutor">AUTOR</span>
-              <span id="barVotesAutor" class="result-bar-votes-sub">0 votos</span>
-            </div>
-          </div>
-          <div class="result-bar-track">
-            <div id="barFillAutor" class="result-bar-fill"></div>
-          </div>
-          <div id="barPctAutor" class="result-bar-pct">0 %</div>
-        </div>
-
-        <div id="barRowIa" class="result-bar-row">
-          <div class="result-bar-label">
-            <span>🤖</span>
-            <div>
-              <span>IA</span>
-              <span id="barVotesIa" class="result-bar-votes-sub">0 votos</span>
-            </div>
-          </div>
-          <div class="result-bar-track">
-            <div id="barFillIa" class="result-bar-fill"></div>
-          </div>
-          <div id="barPctIa" class="result-bar-pct">0 %</div>
-        </div>
-      </div>
-
-      <!-- Estado 5: Veredicto, Autor y Fuente Verificada -->
-      <div id="revealCallout" class="reveal-callout hidden">
-        <div class="reveal-headline">
-          <span id="revealVerdictBadge" class="reveal-verdict-pill">📚 ERA AUTOR</span>
-          <span id="revealAuthorText" class="reveal-author-name"></span>
-        </div>
-        <p id="revealExplanationText" class="reveal-explanation"></p>
-        <div id="revealSourceText" class="reveal-source-verified"></div>
-      </div>
-    </section>
-
-    <!-- ==================================================================
-         ESTADOS 4 y 5: TODAS LAS FRASES EN ORDEN (#1 A #9) CON % Y REVELACIÓN
-         ================================================================== -->
-    <section id="stageAllQuestionsResults" class="all-q-results-section hidden">
-      <div class="all-q-header">
-        <div>
-          <h2 id="allQTitle" class="all-q-main-title">Resultados de la votación por frase (1 a 9)</h2>
-          <p id="allQSubtitle" class="all-q-subtitle">Porcentaje obtenido por cada opción en cada una de las preguntas</p>
-        </div>
-        <div class="live-vote-counter">
-          Votos totales: <strong id="allQTotalVotes">0</strong>
-        </div>
-      </div>
-
-      <div id="allQuestionsGrid" class="all-questions-grid"></div>
-    </section>
-
-    <!-- ==================================================================
-         ESTADO FINAL: RESUMEN GENERAL DE LAS 9 FRASES
-         ================================================================== -->
-    <section id="stageFinal" class="final-summary-layout hidden">
-      <div class="final-left-panel">
-        <div>
-          <h1 class="final-main-title">¿Qué tan buenos somos detectando?</h1>
-          <div id="finalGlobalPct" class="final-score-big">0 %</div>
-          <p class="final-score-caption">
-            de aciertos globales (<strong id="finalTotalVotes">0</strong> votos totales emitidos)
-          </p>
-        </div>
-
-        <div class="final-rank-box">
-          <div id="finalRankRange" class="final-rank-label">Diagnóstico colectivo</div>
-          <div id="finalRankTitle" class="final-rank-title">—</div>
-          <p id="finalRankSubtitle" class="final-rank-sub"></p>
-        </div>
-      </div>
-
-      <div class="final-right-panel">
-        <div class="final-list-header">
-          <span id="finalListTitle" class="final-list-title">Resultados por frase (en orden 1 a 9)</span>
-          <div style="display: flex; gap: 6px;">
-            <button type="button" id="btnSortOrder" class="proj-ctrl-btn active">En orden (1-9)</button>
-            <button type="button" id="btnSortDiff" class="proj-ctrl-btn">Por % aciertos</button>
-          </div>
-        </div>
-        <div id="finalQuestionsList" class="final-questions-list"></div>
-      </div>
+      <!-- Grilla 2x3 con las 6 frases (entra 100% en una sola pantalla sin scroll) -->
+      <div id="questionsGrid6" class="questions-grid-6"></div>
     </section>
 
   </main>
 
-  <!-- Pie discreto -->
-  <footer class="projector-topbar" style="opacity: 0.6; font-size: 0.85rem;">
-    <span id="footerHint">Atajos de teclado en proyector: [Espacio] Avanzar paso · [1-6] Estados · [◀/▶] Cambiar frase</span>
-    <span id="footerRightUrl" style="font-family: var(--font-mono);"></span>
-  </footer>
-
-  <!-- Modal QR superpuesto cuando la presentadora activa "Mostrar QR" -->
-  <div id="qrOverlayModal" class="qr-overlay-modal hidden">
-    <div class="qr-overlay-content">
-      <div class="qr-card-large" style="padding: 22px;">
-        <div id="modalQrContainer" class="qr-box"></div>
-      </div>
-      <div>
-        <h2 style="font-size: 2.6rem; font-weight: 800; margin-bottom: 14px;">
-          Sumate a la votación
-        </h2>
-        <p style="font-size: 1.45rem; color: var(--accent-primary); font-weight: 600; margin-bottom: 16px;">
-          Escaneá el código QR con la cámara de tu celular.
-        </p>
-        <p id="modalQrUrlText" style="font-family: var(--font-mono); font-size: 1.15rem; color: var(--text-secondary); word-break: break-all;"></p>
-      </div>
-    </div>
-  </div>
-
-  <!-- Scripts -->
-  <script src="firebase-config.js?v=7"></script>
-  <script src="questions.js?v=7"></script>
-  <script src="app.js?v=7"></script>
+  <script src="firebase-config.js?v=8"></script>
+  <script src="questions.js?v=8"></script>
+  <script src="app.js?v=8"></script>
   <script>
     (function () {
-      const { STATES, CATEGORY_META, engine, renderQRCode } = window.AIT;
+      const { STATES, FIXED_PARTICIPANT_URL, engine, renderQRCode } = window.AIT;
 
-      const connBanner = document.getElementById("connBanner");
-      const connText = document.getElementById("connText");
-      const projectorRoundBadge = document.getElementById("projectorRoundBadge");
-      const footerRightUrl = document.getElementById("footerRightUrl");
+      const statParticipants = document.getElementById("statParticipants");
+      const statTotalVotes = document.getElementById("statTotalVotes");
 
-      const stageIntro = document.getElementById("stageIntro");
-      const introQrContainer = document.getElementById("introQrContainer");
-      const introQrUrl = document.getElementById("introQrUrl");
+      const btnViewQR = document.getElementById("btnViewQR");
+      const btnViewResults = document.getElementById("btnViewResults");
+      const btnViewReveal = document.getElementById("btnViewReveal");
+      const btnResetAll = document.getElementById("btnResetAll");
+      const btnPrintQR = document.getElementById("btnPrintQR");
+      const btnGoToLiveResults = document.getElementById("btnGoToLiveResults");
 
-      const stageQuestion = document.getElementById("stageQuestion");
-      const projectedQuote = document.getElementById("projectedQuote");
-      const projectedOptionsHint = document.getElementById("projectedOptionsHint");
-      const pillOptionAutor = document.getElementById("pillOptionAutor");
-      const statusRow = document.getElementById("statusRow");
-      const badgeOpen = document.getElementById("badgeOpen");
-      const badgeClosed = document.getElementById("badgeClosed");
-      const liveVotesCount = document.getElementById("liveVotesCount");
+      const sectionQR = document.getElementById("sectionQR");
+      const sectionBoard = document.getElementById("sectionBoard");
+      const mainQrContainer = document.getElementById("mainQrContainer");
+      const mainQrUrl = document.getElementById("mainQrUrl");
+      const sidebarQrContainer = document.getElementById("sidebarQrContainer");
+      const questionsGrid6 = document.getElementById("questionsGrid6");
 
-      const barsSection = document.getElementById("barsSection");
-      const barLabelAutor = document.getElementById("barLabelAutor");
-      const barVotes = {
-        autor: document.getElementById("barVotesAutor"),
-        ia: document.getElementById("barVotesIa")
-      };
-      const barRows = {
-        autor: document.getElementById("barRowAutor"),
-        ia: document.getElementById("barRowIa")
-      };
-      const barFills = {
-        autor: document.getElementById("barFillAutor"),
-        ia: document.getElementById("barFillIa")
-      };
-      const barPcts = {
-        autor: document.getElementById("barPctAutor"),
-        ia: document.getElementById("barPctIa")
-      };
-      let seqTimer = null;
-
-      const revealCallout = document.getElementById("revealCallout");
-      const revealVerdictBadge = document.getElementById("revealVerdictBadge");
-      const revealAuthorText = document.getElementById("revealAuthorText");
-      const revealExplanationText = document.getElementById("revealExplanationText");
-      const revealSourceText = document.getElementById("revealSourceText");
-
-      const stageAllQuestionsResults = document.getElementById("stageAllQuestionsResults");
-      const allQTitle = document.getElementById("allQTitle");
-      const allQSubtitle = document.getElementById("allQSubtitle");
-      const allQTotalVotes = document.getElementById("allQTotalVotes");
-      const allQuestionsGrid = document.getElementById("allQuestionsGrid");
-
-      const stageFinal = document.getElementById("stageFinal");
-      const finalGlobalPct = document.getElementById("finalGlobalPct");
-      const finalTotalVotes = document.getElementById("finalTotalVotes");
-      const finalRankRange = document.getElementById("finalRankRange");
-      const finalRankTitle = document.getElementById("finalRankTitle");
-      const finalRankSubtitle = document.getElementById("finalRankSubtitle");
-      const finalQuestionsList = document.getElementById("finalQuestionsList");
-      const finalListTitle = document.getElementById("finalListTitle");
-      const btnSortOrder = document.getElementById("btnSortOrder");
-      const btnSortDiff = document.getElementById("btnSortDiff");
-      let finalSortMode = "order"; // "order" (1 a 9) | "difficulty" (de más fácil a más engañosa)
-
-      const qrOverlayModal = document.getElementById("qrOverlayModal");
-      const modalQrContainer = document.getElementById("modalQrContainer");
-      const modalQrUrlText = document.getElementById("modalQrUrlText");
-
-      const projStatusButtons = document.querySelectorAll("[data-proj-status]");
-      const projBtnPrev = document.getElementById("projBtnPrev");
-      const projBtnNext = document.getElementById("projBtnNext");
-
-      let lastRenderedUrl = "";
-      let lastStatus = null;
-      let latestSnap = null;
+      const globalAccuracyCard = document.getElementById("globalAccuracyCard");
+      const globalAccValue = document.getElementById("globalAccValue");
 
       engine.init();
 
-      engine.onConnectionChange(({ isConnected, mode }) => {
-        if (!isConnected) {
-          connBanner.classList.remove("hidden", "demo-mode");
-          connBanner.classList.add("offline");
-          connText.textContent = "Sin conexión";
-        } else if (mode === "local") {
-          connBanner.classList.remove("hidden", "offline");
-          connBanner.classList.add("demo-mode");
-          connText.textContent = "Sincronización Local (Demo)";
-        } else {
-          connBanner.classList.add("hidden");
-        }
-      });
+      // Generar el QR fijo una sola vez (siempre apunta a https://stellamcao.github.io/autor-ia-trucha/)
+      renderQRCode(mainQrContainer, FIXED_PARTICIPANT_URL, 300);
+      renderQRCode(sidebarQrContainer, FIXED_PARTICIPANT_URL, 150);
+      mainQrUrl.textContent = FIXED_PARTICIPANT_URL;
 
-      function updateQRCodes() {
-        const url = engine.getParticipantUrl();
-        if (url === lastRenderedUrl) return;
-        lastRenderedUrl = url;
+      function renderScreen(snap) {
+        const { state, summary } = snap;
+        const status = state.status || STATES.RESULTS;
 
-        renderQRCode(introQrContainer, url, 290);
-        renderQRCode(modalQrContainer, url, 270);
-        introQrUrl.textContent = url;
-        modalQrUrlText.textContent = url;
-        footerRightUrl.textContent = url;
-      }
+        statParticipants.textContent = summary.participantsCount;
+        statTotalVotes.textContent = summary.totalVotesAll;
+        globalAccValue.textContent = `${summary.globalAccuracyPct} %`;
 
-      engine.subscribe((snap) => {
-        latestSnap = snap;
-        updateQRCodes();
+        // Actualizar botones activos
+        btnViewQR.classList.toggle("active", status === STATES.QR);
+        btnViewResults.classList.toggle("active", status === STATES.RESULTS);
+        btnViewReveal.classList.toggle("active", status === STATES.REVEALED);
 
-        const { state, questions, currentQuestion, currentQuestionStats, globalSummary } = snap;
-        const status = state.status;
-        const roundNumber = state.currentIndex + 1;
-        const totalQuestions = questions.length;
-
-        // Resaltar botón activo en la barra superior del proyector
-        projStatusButtons.forEach((btn) => {
-          if (btn.getAttribute("data-proj-status") === status) {
-            btn.classList.add("active");
-          } else {
-            btn.classList.remove("active");
-          }
-        });
-
-        if (state.showQRModal && status !== STATES.WAITING) {
-          qrOverlayModal.classList.remove("hidden");
-        } else {
-          qrOverlayModal.classList.add("hidden");
-        }
-
-        // ESTADO 1: INGRESO
-        if (status === STATES.WAITING) {
-          projectorRoundBadge.classList.add("hidden");
-          stageIntro.classList.remove("hidden");
-          stageQuestion.classList.add("hidden");
-          stageAllQuestionsResults.classList.add("hidden");
-          stageFinal.classList.add("hidden");
-          lastStatus = status;
+        if (status === STATES.QR) {
+          sectionQR.classList.remove("hidden");
+          sectionBoard.classList.add("hidden");
           return;
         }
 
-        // ESTADO FINAL: RESUMEN DE TODAS LAS FRASES
-        if (status === STATES.FINAL) {
-          projectorRoundBadge.textContent = "RESUMEN FINAL";
-          projectorRoundBadge.classList.remove("hidden");
+        sectionQR.classList.add("hidden");
+        sectionBoard.classList.remove("hidden");
 
-          stageIntro.classList.add("hidden");
-          stageQuestion.classList.add("hidden");
-          stageAllQuestionsResults.classList.add("hidden");
-          stageFinal.classList.remove("hidden");
+        const isRevealed = status === STATES.REVEALED;
+        globalAccuracyCard.classList.toggle("hidden", !isRevealed);
 
-          renderFinalList(globalSummary);
+        questionsGrid6.innerHTML = "";
 
-          lastStatus = status;
-          return;
-        }
-
-        // ESTADO 4 (4. Resultados %) y ESTADO 5 (5. Revelar):
-        // Mostrar EN ORDEN cada una de las 9 preguntas con sus porcentajes y, en Estado 5, la respuesta correcta + fuente verificada
-        if (status === STATES.RESULTS || status === STATES.REVEALED) {
-          const isRevealed = status === STATES.REVEALED;
-          projectorRoundBadge.textContent = isRevealed
-            ? "5. REVELACIÓN (FRASES 1 A 9)"
-            : "4. RESULTADOS % (FRASES 1 A 9)";
-          projectorRoundBadge.classList.remove("hidden");
-
-          stageIntro.classList.add("hidden");
-          stageQuestion.classList.add("hidden");
-          stageFinal.classList.add("hidden");
-          stageAllQuestionsResults.classList.remove("hidden");
-
-          renderAllQuestionsOrdered(globalSummary, isRevealed, state.currentIndex);
-
-          lastStatus = status;
-          return;
-        }
-
-        // ESTADOS 2 y 3 (Ronda activa: Votación abierta / Votación cerrada)
-        if (!currentQuestion || !currentQuestionStats) return;
-
-        stageIntro.classList.add("hidden");
-        stageFinal.classList.add("hidden");
-        stageAllQuestionsResults.classList.add("hidden");
-        stageQuestion.classList.remove("hidden");
-
-        projectorRoundBadge.textContent = `RONDA ${roundNumber} / ${totalQuestions}`;
-        projectorRoundBadge.classList.remove("hidden");
-
-        projectedQuote.textContent = `“${currentQuestion.quote}”`;
-        const authorFullLabel = engine.getAuthorOptionLabel(currentQuestion);
-        pillOptionAutor.textContent = `📚 ${authorFullLabel}`;
-        barLabelAutor.textContent = authorFullLabel;
-        liveVotesCount.textContent = currentQuestionStats.total;
-
-        // Estado 2: Votación abierta
-        if (status === STATES.OPEN) {
-          projectedQuote.classList.remove("compact");
-          projectedOptionsHint.classList.remove("hidden");
-          statusRow.classList.remove("hidden");
-          badgeOpen.classList.remove("hidden");
-          badgeClosed.classList.add("hidden");
-          barsSection.classList.add("hidden");
-          revealCallout.classList.add("hidden");
-          resetBarStyles();
-        }
-
-        // Estado 3: Votación cerrada (suspenso)
-        else if (status === STATES.CLOSED) {
-          projectedQuote.classList.remove("compact");
-          projectedOptionsHint.classList.remove("hidden");
-          statusRow.classList.remove("hidden");
-          badgeOpen.classList.add("hidden");
-          badgeClosed.classList.remove("hidden");
-          barsSection.classList.add("hidden");
-          revealCallout.classList.add("hidden");
-          resetBarStyles();
-        }
-
-        // Estado 4: Resultados (muestra en orden cada opción con su porcentaje y cantidad de votos)
-        else if (status === STATES.RESULTS) {
-          projectedQuote.classList.add("compact");
-          projectedOptionsHint.classList.add("hidden");
-          statusRow.classList.add("hidden");
-          barsSection.classList.remove("hidden");
-          revealCallout.classList.add("hidden");
-
-          ["autor", "ia"].forEach((key) => {
-            barRows[key].classList.remove("is-correct-choice", "is-dimmed");
-          });
-
-          animateBarsSequentially(
-            currentQuestionStats.pct,
-            currentQuestionStats.counts,
-            lastStatus !== STATES.RESULTS
-          );
-        }
-
-        // Estado 5: Revelación (destaca opción correcta + autor + fuente verificada)
-        else if (status === STATES.REVEALED) {
-          if (seqTimer) {
-            clearTimeout(seqTimer);
-            seqTimer = null;
-          }
-          projectedQuote.classList.add("compact");
-          projectedOptionsHint.classList.add("hidden");
-          statusRow.classList.add("hidden");
-          barsSection.classList.remove("hidden");
-          revealCallout.classList.remove("hidden");
-
-          ["autor", "ia"].forEach((key) => {
-            barRows[key].classList.remove("seq-hidden");
-          });
-
-          animateBarsSequentially(
-            currentQuestionStats.pct,
-            currentQuestionStats.counts,
-            false
-          );
-
-          const correctKey = currentQuestion.correct === "ia" ? "ia" : "autor";
-          ["autor", "ia"].forEach((key) => {
-            if (key === correctKey) {
-              barRows[key].classList.add("is-correct-choice");
-              barRows[key].classList.remove("is-dimmed");
-            } else {
-              barRows[key].classList.remove("is-correct-choice");
-              barRows[key].classList.add("is-dimmed");
-            }
-          });
-
-          if (correctKey === "autor") {
-            revealVerdictBadge.textContent = `📚 ERA AUTOR (${currentQuestion.author || currentQuestion.claimedAuthor})`;
-            revealAuthorText.textContent = "";
-          } else {
-            revealVerdictBadge.textContent = "🤖 ERA IA";
-            revealAuthorText.textContent = `(No era de ${currentQuestion.claimedAuthor})`;
-          }
-
-          revealExplanationText.textContent = currentQuestion.explanation || "";
-          revealSourceText.textContent = currentQuestion.source
-            ? `📖 Fuente verificada: ${currentQuestion.source}`
-            : "";
-        }
-
-        lastStatus = status;
-      });
-
-      function resetBarStyles() {
-        if (seqTimer) {
-          clearTimeout(seqTimer);
-          seqTimer = null;
-        }
-        ["autor", "ia"].forEach((key) => {
-          barFills[key].style.width = "0%";
-          barPcts[key].textContent = "0 %";
-          barVotes[key].textContent = "0 votos";
-          barRows[key].classList.remove("is-correct-choice", "is-dimmed", "seq-hidden");
-        });
-      }
-
-      function renderAllQuestionsOrdered(globalSummary, isRevealed, activeIndex) {
-        if (!globalSummary) return;
-
-        allQTotalVotes.textContent = globalSummary.totalVotesAll;
-
-        if (isRevealed) {
-          allQTitle.textContent = "5. Respuestas correctas y fuentes verificadas (en orden #1 a #9)";
-          allQSubtitle.textContent =
-            "En dorado se destaca la respuesta correcta de cada frase junto a su fuente filológica o generación por IA.";
-        } else {
-          allQTitle.textContent = "4. Resultados de votación por pregunta (en orden #1 a #9)";
-          allQSubtitle.textContent =
-            "Porcentaje votado por el público para AUTOR y para IA en cada una de las frases.";
-        }
-
-        allQuestionsGrid.innerHTML = "";
-
-        globalSummary.perQuestion.forEach((item, idx) => {
+        summary.perQuestion.forEach((item) => {
           const q = item.question;
           const st = item.stats;
           const isIa = q.correct === "ia";
-          const authorOptionText = engine.getAuthorOptionLabel(q);
-          const isCurrentRound = idx === activeIndex;
 
-          const card = document.createElement("div");
-          card.className = "all-q-card" + (isCurrentRound ? " is-active-round" : "");
-          card.style.animationDelay = `${idx * 70}ms`;
+          const card = document.createElement("article");
+          card.className = "q6-card" + (isRevealed ? " is-revealed" : "");
 
           const autorRowClass = isRevealed
             ? !isIa
-              ? "all-q-bar-row is-correct"
-              : "all-q-bar-row is-dimmed"
-            : "all-q-bar-row";
+              ? "q6-bar-row is-correct"
+              : "q6-bar-row is-dimmed"
+            : "q6-bar-row";
 
           const iaRowClass = isRevealed
             ? isIa
-              ? "all-q-bar-row is-correct"
-              : "all-q-bar-row is-dimmed"
-            : "all-q-bar-row";
+              ? "q6-bar-row is-correct"
+              : "q6-bar-row is-dimmed"
+            : "q6-bar-row";
 
-          const verdictText = isIa
-            ? `🤖 ERA IA (No de ${q.claimedAuthor})`
-            : `📚 ERA AUTOR (${q.author || q.claimedAuthor})`;
+          const verdictBadge = isIa
+            ? `<span class="q6-badge q6-badge-ia">🤖 IA</span>`
+            : `<span class="q6-badge q6-badge-autor">📚 ${q.author}</span>`;
 
           card.innerHTML = `
-            <div class="all-q-card-top">
-              <span class="all-q-num">FRASE #${item.index}</span>
-              <span class="all-q-vcount">${st.total} ${st.total === 1 ? "voto" : "votos"}</span>
+            <div class="q6-top">
+              <span class="q6-num">FRASE ${item.index}</span>
+              <span class="q6-votes">${st.total} ${st.total === 1 ? "voto" : "votos"}</span>
             </div>
 
-            <blockquote class="all-q-quote">“${q.quote}”</blockquote>
+            <blockquote class="q6-quote">«${q.quote}»</blockquote>
 
-            <div class="all-q-bars">
+            <div class="q6-bars">
               <div class="${autorRowClass}">
-                <div class="all-q-bar-label">📚 ${authorOptionText}</div>
-                <div class="all-q-bar-track">
-                  <div class="all-q-bar-fill" style="width: ${st.pct.autor}%"></div>
+                <span class="q6-bar-label">📚 Autor/a</span>
+                <div class="q6-bar-track">
+                  <div class="q6-bar-fill" style="width: ${st.pct.autor}%"></div>
                 </div>
-                <div class="all-q-bar-pct">${st.pct.autor} %</div>
+                <span class="q6-bar-pct">${st.pct.autor} %</span>
               </div>
 
               <div class="${iaRowClass}">
-                <div class="all-q-bar-label">🤖 IA</div>
-                <div class="all-q-bar-track">
-                  <div class="all-q-bar-fill" style="width: ${st.pct.ia}%"></div>
+                <span class="q6-bar-label">🤖 IA</span>
+                <div class="q6-bar-track">
+                  <div class="q6-bar-fill" style="width: ${st.pct.ia}%"></div>
                 </div>
-                <div class="all-q-bar-pct">${st.pct.ia} %</div>
+                <span class="q6-bar-pct">${st.pct.ia} %</span>
               </div>
             </div>
 
-            ${
-              isRevealed
-                ? `<div class="all-q-reveal-footer">
-                    <span class="all-q-verdict-badge">${verdictText}</span>
-                    <span class="all-q-source">📖 ${q.source || q.explanation}</span>
-                  </div>`
-                : ""
-            }
-          `;
-
-          allQuestionsGrid.appendChild(card);
-        });
-      }
-
-      function renderFinalList(globalSummary) {
-        if (!globalSummary) return;
-
-        finalGlobalPct.textContent = `${globalSummary.globalAccuracyPct} %`;
-        finalTotalVotes.textContent = globalSummary.totalVotesAll;
-        finalRankRange.textContent = `Rango ${globalSummary.rank.range} de aciertos`;
-        finalRankTitle.textContent = globalSummary.rank.title;
-        finalRankSubtitle.textContent = globalSummary.rank.subtitle;
-
-        const listToRender =
-          finalSortMode === "order"
-            ? globalSummary.perQuestion
-            : globalSummary.sortedByDifficulty;
-
-        finalListTitle.textContent =
-          finalSortMode === "order"
-            ? "Resultados por pregunta (en orden 1 a 9)"
-            : "De la más fácil a la más engañosa (% de aciertos)";
-
-        finalQuestionsList.innerHTML = "";
-        listToRender.forEach((item) => {
-          const row = document.createElement("div");
-          row.className = "final-q-item";
-
-          const isIa = item.question.correct === "ia";
-          const authorName = item.question.claimedAuthor || item.question.author || "Autor";
-          const correctBadge = isIa
-            ? `🤖 Era IA`
-            : `📚 Era ${authorName}`;
-
-          row.innerHTML = `
-            <div class="final-q-main">
-              <div class="final-q-quote" title="${item.question.quote.replace(/"/g, '&quot;')}">
-                <strong>#${item.index}</strong> “${item.question.quote}”
+            <div class="q6-answer-box ${isRevealed ? "" : "hidden"}">
+              <div class="q6-answer-header">
+                ${verdictBadge}
               </div>
-              <div class="final-q-breakdown">
-                <span class="final-q-opt ${!isIa ? 'correct-opt' : ''}">📚 ${authorName}: <strong>${item.stats.pct.autor} %</strong></span>
-                <span class="final-q-opt ${isIa ? 'correct-opt' : ''}">🤖 IA: <strong>${item.stats.pct.ia} %</strong></span>
-                <span class="final-q-verdict-mini">${correctBadge}</span>
-              </div>
-            </div>
-            <div class="final-q-pct-box">
-              <span class="final-q-pct">${item.stats.accuracyPct} %</span>
-              <span class="final-q-pct-sub">aciertos</span>
+              <div class="q6-reference">${q.source}</div>
             </div>
           `;
-          finalQuestionsList.appendChild(row);
+
+          questionsGrid6.appendChild(card);
         });
       }
 
-      btnSortOrder.addEventListener("click", () => {
-        finalSortMode = "order";
-        btnSortOrder.classList.add("active");
-        btnSortDiff.classList.remove("active");
-        if (latestSnap) renderFinalList(latestSnap.globalSummary);
+      engine.subscribe(renderScreen);
+
+      btnViewQR.addEventListener("click", () => {
+        engine.updateState({ status: STATES.QR });
       });
 
-      btnSortDiff.addEventListener("click", () => {
-        finalSortMode = "difficulty";
-        btnSortDiff.classList.add("active");
-        btnSortOrder.classList.remove("active");
-        if (latestSnap) renderFinalList(latestSnap.globalSummary);
+      btnGoToLiveResults.addEventListener("click", () => {
+        engine.updateState({ status: STATES.RESULTS });
       });
 
-      function animateBarsSequentially(pctObj, countsObj, animateStepByStep) {
-        const formatVotes = (n) => (n === 1 ? "1 voto" : `${n} votos`);
-
-        if (animateStepByStep) {
-          if (seqTimer) clearTimeout(seqTimer);
-
-          // Preparar ambas en 0 y ocultar la segunda fila para que aparezcan en orden (1º AUTOR, 2º IA)
-          barFills.autor.style.width = "0%";
-          barPcts.autor.textContent = "0 %";
-          barVotes.autor.textContent = formatVotes(countsObj.autor || 0);
-          barRows.autor.classList.remove("seq-hidden");
-
-          barFills.ia.style.width = "0%";
-          barPcts.ia.textContent = "0 %";
-          barVotes.ia.textContent = formatVotes(countsObj.ia || 0);
-          barRows.ia.classList.add("seq-hidden");
-
-          // Paso 1: Animar primero la respuesta 1: AUTOR (Nombre) y su %
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              barFills.autor.style.width = `${pctObj.autor}%`;
-              barPcts.autor.textContent = `${pctObj.autor} %`;
-            });
-          });
-
-          // Paso 2 (tras 750ms): Mostrar y animar la respuesta 2: IA y su %
-          seqTimer = setTimeout(() => {
-            barRows.ia.classList.remove("seq-hidden");
-            requestAnimationFrame(() => {
-              barFills.ia.style.width = `${pctObj.ia}%`;
-              barPcts.ia.textContent = `${pctObj.ia} %`;
-            });
-          }, 750);
-        } else {
-          ["autor", "ia"].forEach((key) => {
-            barRows[key].classList.remove("seq-hidden");
-            barFills[key].style.width = `${pctObj[key]}%`;
-            barPcts[key].textContent = `${pctObj[key]} %`;
-            barVotes[key].textContent = formatVotes((countsObj && countsObj[key]) || 0);
-          });
-        }
-      }
-
-      // Controles directos en la pantalla proyectada (clics y atajos de teclado)
-      projStatusButtons.forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const target = btn.getAttribute("data-proj-status");
-          engine.updateState({ status: target });
-        });
+      btnViewResults.addEventListener("click", () => {
+        engine.updateState({ status: STATES.RESULTS });
       });
 
-      projBtnPrev.addEventListener("click", () => {
-        if (!latestSnap) return;
-        const prevIdx = Math.max(0, latestSnap.state.currentIndex - 1);
-        engine.updateState({ currentIndex: prevIdx, status: STATES.OPEN });
+      btnViewReveal.addEventListener("click", () => {
+        engine.updateState({ status: STATES.REVEALED });
       });
 
-      projBtnNext.addEventListener("click", () => {
-        if (!latestSnap) return;
-        const { state, questions } = latestSnap;
-        if (state.currentIndex < questions.length - 1) {
-          engine.updateState({ currentIndex: state.currentIndex + 1, status: STATES.OPEN });
-        } else {
-          engine.updateState({ status: STATES.FINAL });
-        }
+      btnPrintQR.addEventListener("click", () => {
+        window.print();
       });
 
-      // Atajos de teclado para manejar directamente desde la computadora conectada al proyector
-      window.addEventListener("keydown", (e) => {
-        if (!latestSnap) return;
-        const { state, questions } = latestSnap;
-
-        if (e.key === "1") engine.updateState({ status: STATES.WAITING });
-        else if (e.key === "2") engine.updateState({ status: STATES.OPEN });
-        else if (e.key === "3") engine.updateState({ status: STATES.CLOSED });
-        else if (e.key === "4") engine.updateState({ status: STATES.RESULTS });
-        else if (e.key === "5") engine.updateState({ status: STATES.REVEALED });
-        else if (e.key === "6") engine.updateState({ status: STATES.FINAL });
-        else if (e.key === "ArrowRight") {
-          if (state.currentIndex < questions.length - 1) {
-            engine.updateState({ currentIndex: state.currentIndex + 1, status: STATES.OPEN });
-          }
-        } else if (e.key === "ArrowLeft") {
-          if (state.currentIndex > 0) {
-            engine.updateState({ currentIndex: state.currentIndex - 1, status: STATES.OPEN });
-          }
-        } else if (e.key === " ") {
-          e.preventDefault();
-          // Barra espaciadora avanza secuencialmente por los estados de la ronda
-          const order = [STATES.WAITING, STATES.OPEN, STATES.CLOSED, STATES.RESULTS, STATES.REVEALED];
-          const curPos = order.indexOf(state.status);
-          if (curPos >= 0 && curPos < order.length - 1) {
-            engine.updateState({ status: order[curPos + 1] });
-          } else if (state.status === STATES.REVEALED) {
-            if (state.currentIndex < questions.length - 1) {
-              engine.updateState({ currentIndex: state.currentIndex + 1, status: STATES.OPEN });
-            } else {
-              engine.updateState({ status: STATES.FINAL });
-            }
-          }
+      btnResetAll.addEventListener("click", async () => {
+        if (confirm("¿Seguro que querés poner todos los votos en cero para una nueva pasada?")) {
+          await engine.resetEntireSession();
         }
       });
     })();

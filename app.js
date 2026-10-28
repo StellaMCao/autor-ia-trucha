@@ -1,40 +1,37 @@
 /**
  * LÓGICA CENTRAL Y SINCRONIZACIÓN EN TIEMPO REAL
- * ¿Autor o IA?
+ * ¿Autor o IA? — Versión simplificada de 6 frases en sucesión
  * 
- * Soporta:
- * 1. Firebase Realtime Database (SDK WebSocket + Respaldo automático HTTP REST
- *    para celulares donde el navegador o la red bloquee WebSockets).
- * 2. Sincronización Local multi-pestaña (BroadcastChannel + localStorage).
+ * - Los participantes escanean el QR fijo y responden las 6 frases en sucesión a su propio ritmo.
+ * - La pantalla proyectada (resultados.html) recibe los votos en tiempo real y muestra
+ *   las 6 frases con sus porcentajes (y al hacer clic en "Revelar respuestas", muestra
+ *   si era Autor/a o IA con su referencia bibliográfica).
  */
 
 (function () {
-  const STORAGE_KEY_LOCAL_DB = "ait_local_db_v3";
-  const STORAGE_KEY_DEVICE_ID = "ait_device_id_v3";
-  const STORAGE_KEY_CUSTOM_QUESTIONS = "ait_custom_questions_v3";
-  const STORAGE_KEY_VOTED_CACHE = "ait_voted_cache_v3";
+  const STORAGE_KEY_LOCAL_DB = "ait_local_db_v6";
+  const STORAGE_KEY_DEVICE_ID = "ait_device_id_v6";
+  const STORAGE_KEY_VOTED_CACHE = "ait_voted_cache_v6";
 
-  // Estados posibles de la sesión
+  // URL fija para el QR (para proyectar o imprimir)
+  const FIXED_PARTICIPANT_URL = "https://stellamcao.github.io/autor-ia-trucha/";
+
+  // Estados de la pantalla proyectada
   const STATES = {
-    WAITING: "waiting",       // Estado 1: Ingreso / QR grande
-    OPEN: "open",             // Estado 2: Votación abierta
-    CLOSED: "closed",         // Estado 3: Votación cerrada (suspenso)
-    RESULTS: "results",       // Estado 4: Resultados (barras horizontales neutras)
-    REVEALED: "revealed",     // Estado 5: Revelación de respuesta correcta y fuente verificada
-    FINAL: "final"            // Resultado final de las 9 frases
+    QR: "qr",               // Pantalla con QR grande para escanear
+    RESULTS: "results",     // Las 6 frases con sus barras de % en vivo (sin revelar solución)
+    REVEALED: "revealed"    // Las 6 frases revelando Autor/a + referencia o IA
   };
 
   const DEFAULT_SESSION_STATE = {
-    status: STATES.OPEN,
-    currentIndex: 0,
-    showQRModal: false,
-    sessionId: "sess_initial",
+    status: STATES.RESULTS,
+    sessionId: "sess_6q_v1",
     updatedAt: Date.now()
   };
 
   class GameSyncEngine {
     constructor() {
-      this.mode = "local"; // "firebase" | "local"
+      this.mode = "local";
       this.isConnected = true;
       this.db = null;
       this.rootRef = null;
@@ -44,12 +41,10 @@
 
       this.data = {
         state: { ...DEFAULT_SESSION_STATE },
-        votes: {},
-        customQuestions: null
+        votes: {}
       };
 
       this.listeners = new Set();
-      this.connectionListeners = new Set();
     }
 
     init() {
@@ -66,11 +61,11 @@
         this.restBaseUrl = `${cleanDbUrl}/${path}`;
         this.mode = "firebase";
 
-        // 1. Iniciar respaldo HTTP REST inmediato (funciona en cualquier celular aunque falle WebSockets)
+        // Sincronización HTTP REST directa cada 2s (infalible en celulares y proyector)
         this._fetchViaRest();
         this.pollTimer = setInterval(() => this._fetchViaRest(), 2000);
 
-        // 2. Si el SDK de Firebase cargó, conectar también por WebSockets para latencia cero
+        // Además WebSocket de Firebase para actualización instantánea
         if (typeof window.firebase !== "undefined") {
           try {
             if (!window.firebase.apps.length) {
@@ -78,9 +73,12 @@
             }
             this.db = window.firebase.database();
             this.rootRef = this.db.ref(path);
-            this._setupFirebaseListeners();
+            this.rootRef.on("value", (snapshot) => {
+              const val = snapshot.val() || {};
+              this._applyIncomingData(val);
+            });
           } catch (err) {
-            console.warn("Usando sincronización REST pura para Firebase:", err);
+            console.warn("Usando REST directo:", err);
           }
         }
         return;
@@ -99,22 +97,23 @@
         if (!res.ok) return;
         const val = (await res.json()) || {};
         this._applyIncomingData(val);
-        if (!this.isConnected) {
-          this.isConnected = true;
-          this._notifyConnection();
-        }
-      } catch (e) {
-        // Silencioso para no interrumpir si hay microcorte de red móvil
-      }
+      } catch (e) {}
     }
 
     _applyIncomingData(val) {
       const incomingState = { ...DEFAULT_SESSION_STATE, ...(val.state || {}) };
+      const prevSessionId = this.data.state && this.data.state.sessionId;
+      if (prevSessionId && incomingState.sessionId && prevSessionId !== incomingState.sessionId) {
+        // Si se reinició la sesión, limpiar caché local de votos
+        try {
+          localStorage.removeItem(STORAGE_KEY_VOTED_CACHE);
+        } catch (e) {}
+      }
+
       const prevJson = JSON.stringify({ s: this.data.state, v: this.data.votes });
       this.data = {
         state: incomingState,
-        votes: val.votes || {},
-        customQuestions: val.customQuestions || null
+        votes: val.votes || {}
       };
       const nextJson = JSON.stringify({ s: this.data.state, v: this.data.votes });
       if (prevJson !== nextJson) {
@@ -122,49 +121,22 @@
       }
     }
 
-    _setupFirebaseListeners() {
-      const connectedRef = this.db.ref(".info/connected");
-      connectedRef.on("value", (snap) => {
-        if (snap.val() === true) {
-          this.isConnected = true;
-          this._notifyConnection();
-        }
-      });
-
-      this.rootRef.on(
-        "value",
-        (snapshot) => {
-          const val = snapshot.val() || {};
-          this._applyIncomingData(val);
-        },
-        (error) => {
-          console.warn("Fallback a HTTP REST:", error);
-        }
-      );
-    }
-
     _setupLocalListeners() {
       this._loadFromLocalStorage();
-
       if (typeof BroadcastChannel !== "undefined") {
-        this.channel = new BroadcastChannel("autor_ia_channel_v3");
+        this.channel = new BroadcastChannel("autor_ia_channel_v6");
         this.channel.onmessage = () => {
           this._loadFromLocalStorage();
           this._notify();
         };
       }
-
       window.addEventListener("storage", (e) => {
         if (e.key === STORAGE_KEY_LOCAL_DB) {
           this._loadFromLocalStorage();
           this._notify();
         }
       });
-
-      setTimeout(() => {
-        this._notifyConnection();
-        this._notify();
-      }, 10);
+      setTimeout(() => this._notify(), 10);
     }
 
     _loadFromLocalStorage() {
@@ -174,15 +146,10 @@
           const parsed = JSON.parse(raw);
           this.data = {
             state: { ...DEFAULT_SESSION_STATE, ...(parsed.state || {}) },
-            votes: parsed.votes || {},
-            customQuestions: parsed.customQuestions || null
+            votes: parsed.votes || {}
           };
-        } else {
-          this._saveToLocalStorage();
         }
-      } catch (e) {
-        console.warn("No se pudo leer localStorage:", e);
-      }
+      } catch (e) {}
     }
 
     _saveToLocalStorage() {
@@ -191,9 +158,7 @@
         if (this.channel) {
           this.channel.postMessage({ type: "sync", ts: Date.now() });
         }
-      } catch (e) {
-        console.warn("No se pudo guardar en localStorage:", e);
-      }
+      } catch (e) {}
     }
 
     subscribe(cb) {
@@ -202,73 +167,38 @@
       return () => this.listeners.delete(cb);
     }
 
-    onConnectionChange(cb) {
-      this.connectionListeners.add(cb);
-      cb({ isConnected: this.isConnected, mode: this.mode });
-      return () => this.connectionListeners.delete(cb);
-    }
-
     _notify() {
       const snap = this.getSnapshot();
       this.listeners.forEach((cb) => {
         try {
           cb(snap);
         } catch (err) {
-          console.error("Error en listener:", err);
+          console.error(err);
         }
       });
     }
 
-    _notifyConnection() {
-      const info = { isConnected: this.isConnected, mode: this.mode };
-      this.connectionListeners.forEach((cb) => cb(info));
+    getQuestions() {
+      return window.DEFAULT_QUESTIONS || [];
     }
 
-    getQuestions() {
-      if (Array.isArray(this.data.customQuestions) && this.data.customQuestions.length > 0) {
-        return this.data.customQuestions;
-      }
-      try {
-        const localCustom = localStorage.getItem(STORAGE_KEY_CUSTOM_QUESTIONS);
-        if (localCustom) {
-          const parsed = JSON.parse(localCustom);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch (e) {}
-      return window.DEFAULT_QUESTIONS || [];
+    getParticipantUrl() {
+      return FIXED_PARTICIPANT_URL;
     }
 
     getSnapshot() {
       const questions = this.getQuestions();
       const state = this.data.state || DEFAULT_SESSION_STATE;
-      const safeIndex = Math.max(0, Math.min(state.currentIndex || 0, Math.max(0, questions.length - 1)));
-      const currentQuestion = questions[safeIndex] || null;
       const votesByQuestion = this.data.votes || {};
+      const summary = this.computeGlobalSummary(questions, votesByQuestion);
 
       return {
         mode: this.mode,
-        isConnected: this.isConnected,
-        state: {
-          ...state,
-          currentIndex: safeIndex
-        },
+        state,
         questions,
-        currentQuestion,
         votesByQuestion,
-        currentQuestionStats: currentQuestion
-          ? this.computeQuestionStats(currentQuestion, votesByQuestion[currentQuestion.id] || {})
-          : null,
-        globalSummary: this.computeGlobalSummary(questions, votesByQuestion)
+        summary
       };
-    }
-
-    getAuthorOptionLabel(question) {
-      if (!question) return "AUTOR";
-      const name = question.claimedAuthor || (question.correct === "autor" ? question.author : null);
-      if (name && name.toLowerCase() !== "ninguno" && name.toLowerCase() !== "inteligencia artificial") {
-        return `AUTOR (${name})`;
-      }
-      return "AUTOR";
     }
 
     computeQuestionStats(question, questionVotesObj) {
@@ -310,9 +240,11 @@
     computeGlobalSummary(questions, votesByQuestion) {
       let totalVotesAll = 0;
       let totalCorrectAll = 0;
+      const uniqueVoters = new Set();
 
       const perQuestion = questions.map((q, idx) => {
         const qVotes = (votesByQuestion && votesByQuestion[q.id]) || {};
+        Object.keys(qVotes).forEach((voterId) => uniqueVoters.add(voterId));
         const stats = this.computeQuestionStats(q, qVotes);
         totalVotesAll += stats.total;
         totalCorrectAll += stats.correctCount;
@@ -326,58 +258,12 @@
       const globalAccuracyPct =
         totalVotesAll > 0 ? Math.round((totalCorrectAll / totalVotesAll) * 100) : 0;
 
-      const sortedByDifficulty = [...perQuestion].sort((a, b) => {
-        if (b.stats.accuracyPct !== a.stats.accuracyPct) {
-          return b.stats.accuracyPct - a.stats.accuracyPct;
-        }
-        return b.stats.total - a.stats.total;
-      });
-
-      const rank = this.getEpistemologicalRank(globalAccuracyPct);
-
       return {
         totalVotesAll,
         totalCorrectAll,
+        participantsCount: uniqueVoters.size,
         globalAccuracyPct,
-        perQuestion,
-        sortedByDifficulty,
-        rank
-      };
-    }
-
-    getEpistemologicalRank(pct) {
-      if (pct <= 33) {
-        return {
-          range: "0–33 %",
-          title: "Paranoia epistemológica insuficiente",
-          subtitle: "Confiaron demasiado en las comillas solemnes. Cualquier modelo con vocabulario filosófico les vende un aforismo."
-        };
-      }
-      if (pct <= 50) {
-        return {
-          range: "34–50 %",
-          title: "Apenas mejor que desconfiar al azar",
-          subtitle: "Una moneda tirada al aire habría tenido dudas existenciales parecidas, pero van por buen camino."
-        };
-      }
-      if (pct <= 70) {
-        return {
-          range: "51–70 %",
-          title: "Detectives digitales en entrenamiento",
-          subtitle: "Buen oído para el estilo clásico, aunque algún aforismo sintético logró infiltrarse."
-        };
-      }
-      if (pct <= 85) {
-        return {
-          range: "71–85 %",
-          title: "Alarmantemente desconfiados",
-          subtitle: "Excelente radar crítico. Distinguen la pluma humana del cálculo estadístico con precisión."
-        };
-      }
-      return {
-        range: "86–100 %",
-        title: "O son muy buenos o ya habían visto las respuestas",
-        subtitle: "Nivel supremo de escepticismo ilustrado. Ni Nietzsche, ni Borges ni el modelo de lenguaje pudieron engañarlos."
+        perQuestion
       };
     }
 
@@ -385,11 +271,7 @@
       try {
         let id = localStorage.getItem(STORAGE_KEY_DEVICE_ID);
         if (!id) {
-          id =
-            "dev_" +
-            Math.random().toString(36).substring(2, 10) +
-            "_" +
-            Date.now().toString(36);
+          id = "dev_" + Math.random().toString(36).substring(2, 10) + "_" + Date.now().toString(36);
           localStorage.setItem(STORAGE_KEY_DEVICE_ID, id);
         }
         return id;
@@ -401,82 +283,61 @@
       }
     }
 
-    getDeviceVote(questionId) {
-      const deviceId = this.getDeviceId();
-      const qVotes = (this.data.votes && this.data.votes[questionId]) || {};
-      if (qVotes[deviceId]) {
-        return typeof qVotes[deviceId] === "string"
-          ? qVotes[deviceId]
-          : qVotes[deviceId].choice;
-      }
+    getDeviceVotesMap() {
+      const sessionKey = (this.data.state && this.data.state.sessionId) || "default";
+      const map = {};
 
+      // 1. Leer de caché local
       try {
         const cache = JSON.parse(localStorage.getItem(STORAGE_KEY_VOTED_CACHE) || "{}");
-        const sessionKey = (this.data.state && this.data.state.sessionId) || "default";
-        if (cache[sessionKey] && cache[sessionKey][questionId]) {
-          return cache[sessionKey][questionId];
+        if (cache[sessionKey]) {
+          Object.assign(map, cache[sessionKey]);
         }
       } catch (e) {}
 
-      return null;
+      // 2. Completar con lo que haya en memoria de Firebase para este dispositivo
+      const devId = this.getDeviceId();
+      const votes = this.data.votes || {};
+      Object.keys(votes).forEach((qId) => {
+        if (votes[qId] && votes[qId][devId]) {
+          const v = votes[qId][devId];
+          map[qId] = typeof v === "string" ? v : v.choice;
+        }
+      });
+
+      return map;
     }
 
-    _setDeviceVoteCache(questionId, choice) {
+    _saveDeviceVoteToCache(questionId, choice) {
       try {
-        const cache = JSON.parse(localStorage.getItem(STORAGE_KEY_VOTED_CACHE) || "{}");
         const sessionKey = (this.data.state && this.data.state.sessionId) || "default";
+        const cache = JSON.parse(localStorage.getItem(STORAGE_KEY_VOTED_CACHE) || "{}");
         if (!cache[sessionKey]) cache[sessionKey] = {};
-        if (choice === null) {
-          delete cache[sessionKey][questionId];
-        } else {
-          cache[sessionKey][questionId] = choice;
-        }
+        cache[sessionKey][questionId] = choice;
         localStorage.setItem(STORAGE_KEY_VOTED_CACHE, JSON.stringify(cache));
       } catch (e) {}
     }
 
-    async submitVote(questionId, choice, customVoterId = null) {
-      if (!["autor", "ia"].includes(choice)) {
-        throw new Error("Opción de voto inválida");
-      }
+    async submitVote(questionId, choice) {
+      if (!["autor", "ia"].includes(choice)) return;
+      const voterId = this.getDeviceId();
+      const votePayload = { choice, ts: Date.now() };
 
-      const voterId = customVoterId || this.getDeviceId();
+      this._saveDeviceVoteToCache(questionId, choice);
 
-      if (!customVoterId && this.getDeviceVote(questionId)) {
-        return { alreadyVoted: true };
-      }
-
-      const votePayload = {
-        choice,
-        ts: Date.now()
-      };
-
-      if (!customVoterId) {
-        this._setDeviceVoteCache(questionId, choice);
-      }
+      if (!this.data.votes[questionId]) this.data.votes[questionId] = {};
+      this.data.votes[questionId][voterId] = votePayload;
+      this._notify();
 
       if (this.mode === "firebase" && this.restBaseUrl) {
-        // Actualizar optimísticamente y enviar por REST + SDK
-        if (!this.data.votes[questionId]) this.data.votes[questionId] = {};
-        this.data.votes[questionId][voterId] = votePayload;
-        this._notify();
-
         await fetch(`${this.restBaseUrl}/votes/${questionId}/${voterId}.json`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(votePayload)
         });
       } else {
-        this._loadFromLocalStorage();
-        if (!this.data.votes[questionId]) {
-          this.data.votes[questionId] = {};
-        }
-        this.data.votes[questionId][voterId] = votePayload;
         this._saveToLocalStorage();
-        this._notify();
       }
-
-      return { success: true };
     }
 
     async updateState(partialState) {
@@ -485,7 +346,6 @@
         ...partialState,
         updatedAt: Date.now()
       };
-
       this.data.state = nextState;
       this._notify();
 
@@ -496,25 +356,6 @@
           body: JSON.stringify(nextState)
         });
       } else {
-        this._loadFromLocalStorage();
-        this.data.state = nextState;
-        this._saveToLocalStorage();
-        this._notify();
-      }
-    }
-
-    async resetQuestionVotes(questionId) {
-      this._setDeviceVoteCache(questionId, null);
-      if (this.data.votes && this.data.votes[questionId]) {
-        delete this.data.votes[questionId];
-        this._notify();
-      }
-
-      if (this.mode === "firebase" && this.restBaseUrl) {
-        await fetch(`${this.restBaseUrl}/votes/${questionId}.json`, {
-          method: "DELETE"
-        });
-      } else {
         this._saveToLocalStorage();
       }
     }
@@ -522,9 +363,7 @@
     async resetEntireSession() {
       const newSessionId = "sess_" + Date.now().toString(36);
       const freshState = {
-        status: STATES.OPEN,
-        currentIndex: 0,
-        showQRModal: false,
+        status: STATES.RESULTS,
         sessionId: newSessionId,
         updatedAt: Date.now()
       };
@@ -548,46 +387,10 @@
       }
     }
 
-    async simulateVotesForCurrentQuestion(count = 20, accuracyBias = 0.58) {
-      const snap = this.getSnapshot();
-      const q = snap.currentQuestion;
-      if (!q) return;
-
-      const correctChoice = q.correct === "ia" ? "ia" : "autor";
-      const wrongChoice = correctChoice === "autor" ? "ia" : "autor";
-      const batch = {};
-
-      for (let i = 0; i < count; i++) {
-        const botId = `sim_${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${i}`;
-        const isCorrect = Math.random() < accuracyBias;
-        const choice = isCorrect ? correctChoice : wrongChoice;
-
-        batch[botId] = {
-          choice,
-          simulated: true,
-          ts: Date.now()
-        };
-      }
-
-      if (!this.data.votes[q.id]) this.data.votes[q.id] = {};
-      Object.assign(this.data.votes[q.id], batch);
-      this._notify();
-
-      if (this.mode === "firebase" && this.restBaseUrl) {
-        await fetch(`${this.restBaseUrl}/votes/${q.id}.json`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(batch)
-        });
-      } else {
-        this._saveToLocalStorage();
-      }
-    }
-
-    async simulateAllQuestionsVotes(votersPerQuestion = 35) {
+    async simulateAllQuestionsVotes(votersCount = 25) {
       const questions = this.getQuestions();
       const allVotes = { ...(this.data.votes || {}) };
-      const biases = [0.74, 0.42, 0.81, 0.68, 0.37, 0.77, 0.85, 0.46, 0.59];
+      const biases = [0.64, 0.72, 0.56, 0.80, 0.68, 0.52];
 
       questions.forEach((q, idx) => {
         if (!allVotes[q.id]) allVotes[q.id] = {};
@@ -595,10 +398,9 @@
         const wrongChoice = correctChoice === "autor" ? "ia" : "autor";
         const bias = biases[idx % biases.length];
 
-        for (let i = 0; i < votersPerQuestion; i++) {
-          const botId = `sim_all_${idx}_${i}_${Math.random().toString(36).substring(2, 6)}`;
-          const isCorrect = Math.random() < bias;
-          const choice = isCorrect ? correctChoice : wrongChoice;
+        for (let i = 0; i < votersCount; i++) {
+          const botId = `sim_${idx}_${i}_${Math.random().toString(36).substring(2, 6)}`;
+          const choice = Math.random() < bias ? correctChoice : wrongChoice;
           allVotes[q.id][botId] = { choice, simulated: true, ts: Date.now() };
         }
       });
@@ -616,72 +418,7 @@
         this._saveToLocalStorage();
       }
     }
-
-    async saveCustomQuestions(newQuestionsArray) {
-      try {
-        if (newQuestionsArray === null) {
-          localStorage.removeItem(STORAGE_KEY_CUSTOM_QUESTIONS);
-        } else {
-          localStorage.setItem(STORAGE_KEY_CUSTOM_QUESTIONS, JSON.stringify(newQuestionsArray));
-        }
-      } catch (e) {}
-
-      this.data.customQuestions = newQuestionsArray;
-      this._notify();
-
-      if (this.mode === "firebase" && this.restBaseUrl) {
-        await fetch(`${this.restBaseUrl}/customQuestions.json`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(newQuestionsArray)
-        });
-      } else {
-        this._saveToLocalStorage();
-      }
-    }
-
-    getParticipantUrl() {
-      const customUrl = localStorage.getItem("ait_custom_participant_url");
-      if (customUrl && customUrl.trim().length > 0) {
-        return customUrl.trim();
-      }
-      const loc = window.location;
-      let path = loc.pathname;
-      path = path.replace(/\/(admin|resultados|index)\.html$/i, "/");
-      if (!path.endsWith("/")) {
-        path += "/";
-      }
-      return `${loc.origin}${path}index.html`;
-    }
-
-    setParticipantUrl(url) {
-      if (!url || !url.trim()) {
-        localStorage.removeItem("ait_custom_participant_url");
-      } else {
-        localStorage.setItem("ait_custom_participant_url", url.trim());
-      }
-      this._notify();
-    }
   }
-
-  const CATEGORY_META = {
-    autor: {
-      key: "autor",
-      label: "AUTOR",
-      shortLabel: "Autor real",
-      revealBadge: "📚 ERA AUTOR",
-      emoji: "📚",
-      description: "Escrita por una persona real con fuente verificada."
-    },
-    ia: {
-      key: "ia",
-      label: "IA",
-      shortLabel: "Inteligencia Artificial",
-      revealBadge: "🤖 ERA IA",
-      emoji: "🤖",
-      description: "Generada estadísticamente por Inteligencia Artificial."
-    }
-  };
 
   function renderQRCode(containerEl, text, size = 260) {
     if (!containerEl) return;
@@ -698,24 +435,20 @@
           correctLevel: window.QRCode.CorrectLevel.M
         });
         return;
-      } catch (e) {
-        console.warn("Fallback QR image:", e);
-      }
+      } catch (e) {}
     }
 
     const img = document.createElement("img");
-    img.alt = "Código QR para participar";
+    img.alt = "Código QR";
     img.width = size;
     img.height = size;
-    img.src = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=10&data=${encodeURIComponent(
-      text
-    )}`;
+    img.src = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=10&data=${encodeURIComponent(text)}`;
     containerEl.appendChild(img);
   }
 
   window.AIT = {
     STATES,
-    CATEGORY_META,
+    FIXED_PARTICIPANT_URL,
     engine: new GameSyncEngine(),
     renderQRCode
   };
