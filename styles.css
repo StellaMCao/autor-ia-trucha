@@ -500,7 +500,7 @@ button {
 
 .q6-bar-row {
   display: grid;
-  grid-template-columns: 110px 1fr 54px;
+  grid-template-columns: minmax(150px, 195px) 1fr 54px;
   align-items: center;
   gap: 10px;
   padding: 4px 10px;
@@ -510,9 +510,12 @@ button {
 }
 
 .q6-bar-label {
-  font-size: clamp(0.76rem, 0.88vw, 0.92rem);
+  font-size: clamp(0.75rem, 0.86vw, 0.9rem);
   font-weight: 700;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .q6-bar-track {

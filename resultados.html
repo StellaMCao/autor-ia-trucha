@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>¿Autor o IA? — Pantalla y Resultados</title>
-  <link rel="stylesheet" href="styles.css?v=8" />
+  <link rel="stylesheet" href="styles.css?v=9" />
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -88,9 +88,9 @@
 
   </main>
 
-  <script src="firebase-config.js?v=8"></script>
-  <script src="questions.js?v=8"></script>
-  <script src="app.js?v=8"></script>
+  <script src="firebase-config.js?v=9"></script>
+  <script src="questions.js?v=9"></script>
+  <script src="app.js?v=9"></script>
   <script>
     (function () {
       const { STATES, FIXED_PARTICIPANT_URL, engine, renderQRCode } = window.AIT;
@@ -153,6 +153,8 @@
           const q = item.question;
           const st = item.stats;
           const isIa = q.correct === "ia";
+          const authorOptionName = q.authorOption || q.author;
+          const verdictText = q.verdictLabel || (isIa ? "IA" : authorOptionName);
 
           const card = document.createElement("article");
           card.className = "q6-card" + (isRevealed ? " is-revealed" : "");
@@ -170,8 +172,8 @@
             : "q6-bar-row";
 
           const verdictBadge = isIa
-            ? `<span class="q6-badge q6-badge-ia">🤖 IA</span>`
-            : `<span class="q6-badge q6-badge-autor">📚 ${q.author}</span>`;
+            ? `<span class="q6-badge q6-badge-ia">🤖 ${verdictText}</span>`
+            : `<span class="q6-badge q6-badge-autor">📚 ${verdictText}</span>`;
 
           card.innerHTML = `
             <div class="q6-top">
@@ -183,7 +185,7 @@
 
             <div class="q6-bars">
               <div class="${autorRowClass}">
-                <span class="q6-bar-label">📚 Autor/a</span>
+                <span class="q6-bar-label" title="${authorOptionName}">📚 ${authorOptionName}</span>
                 <div class="q6-bar-track">
                   <div class="q6-bar-fill" style="width: ${st.pct.autor}%"></div>
                 </div>

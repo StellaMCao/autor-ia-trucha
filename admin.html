@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Panel de Control — ¿Autor/a o IA?</title>
-  <link rel="stylesheet" href="styles.css?v=8" />
+  <link rel="stylesheet" href="styles.css?v=9" />
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -117,9 +117,9 @@
     <p style="font-family: monospace; font-size: 16pt;">https://stellamcao.github.io/autor-ia-trucha/</p>
   </div>
 
-  <script src="firebase-config.js?v=8"></script>
-  <script src="questions.js?v=8"></script>
-  <script src="app.js?v=8"></script>
+  <script src="firebase-config.js?v=9"></script>
+  <script src="questions.js?v=9"></script>
+  <script src="app.js?v=9"></script>
   <script>
     (function () {
       const { STATES, FIXED_PARTICIPANT_URL, engine, renderQRCode } = window.AIT;
@@ -164,16 +164,18 @@
           const q = item.question;
           const stats = item.stats;
           const isIa = q.correct === "ia";
+          const authorOpt = q.authorOption || q.author;
+          const verdict = q.verdictLabel || (isIa ? "IA" : authorOpt);
           const div = document.createElement("div");
           div.style.cssText =
             "padding: 12px 14px; border-radius: 10px; background: var(--bg-deep); border: 1px solid var(--border-subtle);";
           div.innerHTML = `
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
               <strong style="color: var(--accent-primary); font-family: var(--font-mono); font-size: 0.82rem;">
-                #${item.index} · ${isIa ? "🤖 IA" : "📚 " + q.author}
+                #${item.index} · ${isIa ? "🤖 " + verdict : "📚 " + verdict}
               </strong>
               <span style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-secondary);">
-                Autor/a: ${stats.pct.autor}% | IA: ${stats.pct.ia}% (${stats.total} v.)
+                ${authorOpt}: ${stats.pct.autor}% | IA: ${stats.pct.ia}% (${stats.total} v.)
               </span>
             </div>
             <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 4px;">«${q.quote}»</div>

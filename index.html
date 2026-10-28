@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <title>¿Autor o IA? — Participación</title>
-  <link rel="stylesheet" href="styles.css?v=8" />
+  <link rel="stylesheet" href="styles.css?v=9" />
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 </head>
@@ -33,7 +33,7 @@
 
       <div id="voteButtonsContainer" class="vote-buttons-stack">
         <button type="button" class="vote-btn" data-choice="autor">
-          <span>📚 AUTOR / AUTORA</span>
+          <span id="btnAutorLabel">📚 Jorge Luis Borges</span>
           <span class="vote-btn-arrow">→</span>
         </button>
 
@@ -59,9 +59,9 @@
     Participación anónima en tiempo real
   </footer>
 
-  <script src="firebase-config.js?v=8"></script>
-  <script src="questions.js?v=8"></script>
-  <script src="app.js?v=8"></script>
+  <script src="firebase-config.js?v=9"></script>
+  <script src="questions.js?v=9"></script>
+  <script src="app.js?v=9"></script>
   <script>
     (function () {
       const { engine } = window.AIT;
@@ -72,6 +72,7 @@
       const viewDone = document.getElementById("viewDone");
       const mobileQuestionLabel = document.getElementById("mobileQuestionLabel");
       const mobileQuoteText = document.getElementById("mobileQuoteText");
+      const btnAutorLabel = document.getElementById("btnAutorLabel");
       const voteButtons = document.querySelectorAll(".vote-btn");
 
       let questions = window.DEFAULT_QUESTIONS || [];
@@ -106,6 +107,7 @@
 
         mobileQuestionLabel.textContent = `FRASE ${stepNum} DE ${total}`;
         mobileQuoteText.textContent = `«${currentQ.quote}»`;
+        btnAutorLabel.textContent = `📚 ${currentQ.authorOption || currentQ.author}`;
 
         viewDone.classList.add("hidden");
         viewVoting.classList.remove("hidden");
