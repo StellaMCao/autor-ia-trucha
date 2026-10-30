@@ -730,6 +730,15 @@ button {
   color: var(--text-secondary);
 }
 
+/* Modo embebido para diapositiva de PowerPoint (?ppt=1 o ?embed=1) */
+body.ppt-embed-mode .board-6-layout {
+  grid-template-columns: 1fr;
+}
+
+body.ppt-embed-mode .board-qr-sidebar {
+  display: none;
+}
+
 @media (max-width: 980px) {
   .board-6-layout {
     grid-template-columns: 1fr;

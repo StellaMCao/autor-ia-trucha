@@ -115,6 +115,13 @@
       const globalAccuracyCard = document.getElementById("globalAccuracyCard");
       const globalAccValue = document.getElementById("globalAccValue");
 
+      // Si se abre con ?embed=1 (para incrustar dentro de una diapositiva de PowerPoint),
+      // ocultar el QR lateral para que las 6 frases aprovechen todo el ancho de la diapositiva
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("embed") === "1" || urlParams.get("ppt") === "1") {
+        document.body.classList.add("ppt-embed-mode");
+      }
+
       engine.init();
 
       // Generar el QR fijo una sola vez (siempre apunta a https://stellamcao.github.io/autor-ia-trucha/)
