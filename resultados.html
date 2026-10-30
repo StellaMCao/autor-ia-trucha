@@ -242,10 +242,29 @@
         window.print();
       });
 
+      let confirmResetTimer = null;
+
       btnResetAll.addEventListener("click", async () => {
-        if (confirm("¿Seguro que querés poner todos los votos en cero para una nueva pasada?")) {
-          await engine.resetEntireSession();
+        // Los iframes de PowerPoint bloquean window.confirm(), así que usamos confirmación de doble clic en el propio botón
+        if (!btnResetAll.dataset.confirming) {
+          btnResetAll.dataset.confirming = "1";
+          btnResetAll.textContent = "⚠️ ¿Confirmar reinicio? (Clic de nuevo)";
+          if (confirmResetTimer) clearTimeout(confirmResetTimer);
+          confirmResetTimer = setTimeout(() => {
+            delete btnResetAll.dataset.confirming;
+            btnResetAll.textContent = "🔄 Reiniciar votos";
+          }, 4000);
+          return;
         }
+
+        delete btnResetAll.dataset.confirming;
+        if (confirmResetTimer) clearTimeout(confirmResetTimer);
+        btnResetAll.textContent = "⏳ Reiniciando…";
+        await engine.resetEntireSession();
+        btnResetAll.textContent = "✓ Votos en cero";
+        setTimeout(() => {
+          btnResetAll.textContent = "🔄 Reiniciar votos";
+        }, 1500);
       });
     })();
   </script>

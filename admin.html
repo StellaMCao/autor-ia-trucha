@@ -195,10 +195,24 @@
         engine.simulateAllQuestionsVotes(20);
       });
 
+      let adminResetTimer = null;
       btnResetSession.addEventListener("click", async () => {
-        if (confirm("¿Borrar todos los votos para empezar de nuevo?")) {
-          await engine.resetEntireSession();
+        if (!btnResetSession.dataset.confirming) {
+          btnResetSession.dataset.confirming = "1";
+          btnResetSession.textContent = "⚠️ Tocá de nuevo para confirmar reinicio";
+          if (adminResetTimer) clearTimeout(adminResetTimer);
+          adminResetTimer = setTimeout(() => {
+            delete btnResetSession.dataset.confirming;
+            btnResetSession.textContent = "🗑️ Reiniciar todos los votos a cero";
+          }, 4000);
+          return;
         }
+        delete btnResetSession.dataset.confirming;
+        await engine.resetEntireSession();
+        btnResetSession.textContent = "✓ Votos reiniciados a cero";
+        setTimeout(() => {
+          btnResetSession.textContent = "🗑️ Reiniciar todos los votos a cero";
+        }, 1500);
       });
 
       btnPrintFromAdmin.addEventListener("click", () => {
