@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>¿Autor/a o IA? — Porcentaje Total de Aciertos</title>
+  <link rel="stylesheet" href="styles.css?v=10" />
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <style>
+    .total-body {
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4vh 5vw;
+      background:
+        radial-gradient(circle at 50% 25%, rgba(251, 191, 36, 0.12), transparent 55%),
+        var(--bg-deep);
+      text-align: center;
+    }
+
+    .total-card {
+      max-width: 980px;
+      width: 100%;
+      background: var(--bg-surface);
+      border: 2px solid var(--reveal-gold-border);
+      border-radius: 28px;
+      padding: 5vh 4vw;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2.2vh;
+      box-shadow: 0 25px 70px rgba(0, 0, 0, 0.55);
+    }
+
+    .total-kicker {
+      font-family: var(--font-mono);
+      font-size: clamp(0.9rem, 1.3vw, 1.35rem);
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--reveal-gold);
+      background: var(--reveal-gold-bg);
+      padding: 6px 18px;
+      border-radius: 999px;
+      border: 1px solid rgba(251, 191, 36, 0.4);
+    }
+
+    .total-title {
+      font-size: clamp(1.8rem, 3.4vw, 3.6rem);
+      font-weight: 800;
+      line-height: 1.12;
+      color: var(--text-primary);
+    }
+
+    .total-big-pct {
+      font-family: var(--font-mono);
+      font-size: clamp(5.5rem, 13vw, 13.5rem);
+      font-weight: 800;
+      color: var(--reveal-gold);
+      line-height: 0.95;
+      letter-spacing: -0.03em;
+      margin: 1vh 0;
+    }
+
+    .total-bar-wrap {
+      width: 100%;
+      max-width: 680px;
+      height: 22px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .total-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #f59e0b, #fbbf24);
+      border-radius: 999px;
+      transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .total-meta {
+      font-family: var(--font-mono);
+      font-size: clamp(1rem, 1.45vw, 1.5rem);
+      color: var(--text-secondary);
+    }
+
+    .total-meta strong {
+      color: var(--text-primary);
+    }
+
+    .total-rank-box {
+      margin-top: 1vh;
+      padding: 2.2vh 2.5vw;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-strong);
+      border-radius: 18px;
+      max-width: 760px;
+      width: 100%;
+    }
+
+    .total-rank-title {
+      font-size: clamp(1.3rem, 2.2vw, 2.3rem);
+      font-weight: 800;
+      color: var(--reveal-gold);
+      margin-bottom: 6px;
+    }
+
+    .total-rank-desc {
+      font-size: clamp(0.95rem, 1.35vw, 1.4rem);
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body class="total-body">
+
+  <main class="total-card">
+    <span class="total-kicker">Resultado General del Auditorio</span>
+    <h1 class="total-title">¿Qué tan buenos somos detectando?</h1>
+
+    <div id="globalPctBig" class="total-big-pct">0 %</div>
+
+    <div class="total-bar-wrap">
+      <div id="globalBarFill" class="total-bar-fill"></div>
+    </div>
+
+    <p class="total-meta">
+      <strong id="correctVotesCount">0</strong> respuestas correctas sobre <strong id="totalVotesCount">0</strong> votos totales (<strong id="participantsCount">0</strong> participantes)
+    </p>
+
+    <div class="total-rank-box">
+      <div id="rankTitle" class="total-rank-title">Esperando votos…</div>
+      <p id="rankDesc" class="total-rank-desc">
+        El porcentaje general de aciertos se calcula automáticamente en tiempo real.
+      </p>
+    </div>
+  </main>
+
+  <script src="firebase-config.js?v=10"></script>
+  <script src="questions.js?v=10"></script>
+  <script src="app.js?v=10"></script>
+  <script>
+    (function () {
+      const { engine } = window.AIT;
+
+      const globalPctBig = document.getElementById("globalPctBig");
+      const globalBarFill = document.getElementById("globalBarFill");
+      const correctVotesCount = document.getElementById("correctVotesCount");
+      const totalVotesCount = document.getElementById("totalVotesCount");
+      const participantsCount = document.getElementById("participantsCount");
+      const rankTitle = document.getElementById("rankTitle");
+      const rankDesc = document.getElementById("rankDesc");
+
+      function getRankDiagnostic(pct, total) {
+        if (total === 0) {
+          return {
+            title: "Esperando los votos del público…",
+            desc: "A medida que respondan las 6 frases, verás acá el porcentaje total de aciertos."
+          };
+        }
+        if (pct <= 33) {
+          return {
+            title: "Paranoia epistemológica insuficiente",
+            desc: "Las imitaciones de la IA lograron infiltrarse con éxito en nuestra biblioteca mental."
+          };
+        }
+        if (pct <= 50) {
+          return {
+            title: "Apenas mejor que desconfiar al azar",
+            desc: "Frontera difusa entre la pluma humana y la simulación estadística."
+          };
+        }
+        if (pct <= 70) {
+          return {
+            title: "Detectives digitales en entrenamiento",
+            desc: "Buen oído lector, aunque más de una imitación sintética logró hacernos dudar."
+          };
+        }
+        if (pct <= 85) {
+          return {
+            title: "Alarmantemente desconfiados",
+            desc: "Gran puntería crítica para distinguir la voz de los autores del cálculo algorítmico."
+          };
+        }
+        return {
+          title: "O son muy buenos o ya habían visto las respuestas",
+          desc: "Nivel supremo de oído literario: ni Borges, ni Zambrano ni Pichon-Rivière pudieron ser suplantados."
+        };
+      }
+
+      engine.init();
+
+      engine.subscribe((snap) => {
+        const { summary } = snap;
+        const pct = summary.globalAccuracyPct;
+
+        globalPctBig.textContent = `${pct} %`;
+        globalBarFill.style.width = `${pct}%`;
+        correctVotesCount.textContent = summary.totalCorrectAll;
+        totalVotesCount.textContent = summary.totalVotesAll;
+        participantsCount.textContent = summary.participantsCount;
+
+        const diag = getRankDiagnostic(pct, summary.totalVotesAll);
+        rankTitle.textContent = diag.title;
+        rankDesc.textContent = diag.desc;
+      });
+    })();
+  </script>
+</body>
+</html>
